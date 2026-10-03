@@ -14,7 +14,15 @@ export const buildBrandBuilderConfig = (baseBuild, profile, { repoRoot, stagedPr
   config.appId = profile.bundleId;
   config.productName = profile.displayName;
   config.extraResources = [
-    ...config.extraResources,
+    ...config.extraResources.flatMap((entry) => (
+      entry.to === 'icons/tray' && profile.trayIconsDir
+        // Menu bar icons from the profile; the per-session status glyphs stay upstream.
+        ? [
+            { from: path.join(repoRoot, profile.trayIconsDir), to: 'icons/tray' },
+            { from: 'resources/icons/tray/status', to: 'icons/tray/status' },
+          ]
+        : [entry]
+    )),
     { from: stagedProfilePath, to: BRAND_PROFILE_RESOURCE_NAME },
   ];
   config.directories = { ...config.directories, output: `dist/brand-${profile.profileId}` };

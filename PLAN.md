@@ -147,6 +147,9 @@ nomobodev ist gebaut, lokal unter `/Applications/nomobodev.app` installiert und 
 - App-Icon: Wortmarke plus zweite Zeile „DEV“ (Poppins SemiBold, Schrift von nomobo.de), damit es sich von späteren nomobo-Apps unterscheidet. Die Server-Auswahl zeigt weiter die reine Wortmarke.
 - Versionen: App und Original-App sind 2.1.0 (aktuelles Release). Der Claudi-Server läuft auf 2.0.4. Ein Server-Update ist ein separater Schritt und wurde nicht durchgeführt.
 
+**Zweites Profil NomoboGaming (2026-10-03)**
+`nomobogaming` (`de.nomobo.nomobogaming`) verbindet sich mit `http://100.100.6.17:3000/` (Tailscale). Profile erlauben dafür `http` nur noch für private Netze und Tailscale. App-Icon „nomobo / GAMING“ auf `#1F1147`. Beide Apps haben jetzt das „nb“-Zeichen von nomobo.de als Menüleisten-Icon. Installiert unter `/Applications/nomobogaming.app`, Zugang übernommen, Verbindung und Neustart geprüft. Die Menüleiste selbst konnte nicht fotografiert werden; geprüft sind die Icon-Dateien im Bundle.
+
 **Vorfall beim Dev-Modus-Test**
 Upstream-`electron:dev` startet einen HMR-Hilfsserver, der zunächst das Profil nicht kannte und die Original-Daten unter `~/.config/openchamber` nutzte. Bei zwei Testläufen (21:58 und 22:01) hat er je eine wartende Nachricht aus der Warteschlange der laufenden Agent-Session an seinen eigenen, kurz danach beendeten OpenCode gesendet. Die Nachricht von 22:01 hat der Nutzer möglicherweise nicht zugestellt bekommen. Behoben in `a41953c`: Bei einem Profil bekommt jeder Dev-Prozess das Profil-Datenverzeichnis, und ein Profil ohne lokalen Server startet gebündelte UI ohne Hilfsserver und ohne lokales OpenCode. Mit leerem Temp-`HOME` geprüft.
 

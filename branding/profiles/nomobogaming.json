@@ -1,0 +1,16 @@
+{
+  "profileId": "nomobogaming",
+  "displayName": "nomobogaming",
+  "bundleId": "de.nomobo.nomobogaming",
+  "iconPath": "branding/assets/nomobogaming/icon.icns",
+  "trayIconsDir": "branding/assets/tray-nomobo",
+  "updatesEnabled": false,
+  "localServer": false,
+  "registerDeepLinkProtocol": false,
+  "defaultHost": {
+    "id": "nomobogaming",
+    "label": "NomoboGaming",
+    "url": "http://100.100.6.17:3000/",
+    "brandLogoId": "nomobo"
+  }
+}

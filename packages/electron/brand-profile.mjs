@@ -34,10 +34,25 @@ export const sanitizeBrandLogoId = (value) => {
 const requiredString = z.string('must be a non-empty string').trim().min(1, 'must be a non-empty string');
 const requiredBoolean = z.boolean('must be true or false');
 
-const httpsUrlWithoutCredentials = requiredString.transform((value, context) => {
+// Plain http is accepted only where the network itself is private: RFC 1918,
+// loopback, and Tailscale (100.64.0.0/10, *.ts.net), whose links are encrypted.
+const isPrivateNetworkHost = (hostname) => {
+  if (hostname === 'localhost' || hostname.endsWith('.ts.net')) return true;
+  const octets = hostname.split('.');
+  if (octets.length !== 4 || !octets.every((octet) => /^\d{1,3}$/.test(octet))) return false;
+  const [a, b] = octets.map(Number);
+  return a === 10
+    || a === 127
+    || (a === 172 && b >= 16 && b <= 31)
+    || (a === 192 && b === 168)
+    || (a === 100 && b >= 64 && b <= 127);
+};
+
+const hostUrlWithoutCredentials = requiredString.transform((value, context) => {
   const url = URL.parse(value);
-  if (!url || url.protocol !== 'https:' || url.username || url.password) {
-    context.addIssue({ code: 'custom', message: 'must be an https URL without credentials' });
+  const secure = url?.protocol === 'https:' || (url?.protocol === 'http:' && isPrivateNetworkHost(url.hostname));
+  if (!url || !secure || url.username || url.password) {
+    context.addIssue({ code: 'custom', message: 'must be an https URL (http only on private or Tailscale networks) without credentials' });
     return z.NEVER;
   }
   return url.toString();
@@ -46,7 +61,7 @@ const httpsUrlWithoutCredentials = requiredString.transform((value, context) => 
 const defaultHostSchema = z.strictObject({
   id: requiredString.refine((id) => id !== RESERVED_HOST_ID, `must not be the reserved id "${RESERVED_HOST_ID}"`),
   label: requiredString,
-  url: httpsUrlWithoutCredentials,
+  url: hostUrlWithoutCredentials,
   brandLogoId: brandLogoIdSchema.optional(),
 }, 'must be an object');
 
@@ -55,6 +70,7 @@ const brandProfileSchema = z.strictObject({
   displayName: requiredString,
   bundleId: requiredString.refine((id) => id !== UPSTREAM_BUNDLE_ID, 'must differ from the upstream OpenChamber bundle id'),
   iconPath: requiredString,
+  trayIconsDir: requiredString.optional(),
   updatesEnabled: requiredBoolean,
   localServer: requiredBoolean,
   registerDeepLinkProtocol: requiredBoolean,

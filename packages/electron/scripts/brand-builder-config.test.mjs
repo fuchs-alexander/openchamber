@@ -46,6 +46,25 @@ test('builds a local app bundle per profile without notarization', () => {
   assert.equal(config.directories.output, 'dist/brand-claudi');
 });
 
+test('replaces the menu bar icons when the profile has its own, keeping the upstream status icons', () => {
+  const trayProfile = { ...profile, trayIconsDir: 'branding/assets/tray-nomobo' };
+  const config = buildBrandBuilderConfig(baseBuild, trayProfile, { repoRoot, stagedProfilePath });
+  const trayEntries = config.extraResources.filter((entry) => entry.to.startsWith('icons/tray'));
+  assert.deepEqual(trayEntries, [
+    { from: path.join(repoRoot, 'branding/assets/tray-nomobo'), to: 'icons/tray' },
+    { from: 'resources/icons/tray/status', to: 'icons/tray/status' },
+  ]);
+});
+
+test('keeps the upstream menu bar icons when the profile has none', () => {
+  const plain = { ...profile };
+  delete plain.trayIconsDir;
+  const config = buildBrandBuilderConfig(baseBuild, plain, { repoRoot, stagedProfilePath });
+  assert.deepEqual(config.extraResources.filter((entry) => entry.to.startsWith('icons/tray')), [
+    { from: 'resources/icons/tray', to: 'icons/tray' },
+  ]);
+});
+
 test('leaves the upstream build configuration untouched', () => {
   const before = JSON.stringify(baseBuild);
   build();

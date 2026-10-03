@@ -101,8 +101,14 @@ let icon = render(width: 1024, height: 1024) { context in
   // Two lines: wordmark, then the label, centred as one block.
   let wordmarkWidth: CGFloat = 600
   let wordmarkHeight = CGFloat(wordmark.height) * wordmarkWidth / CGFloat(wordmark.width)
-  let line = makeLabelLine(label, fontPath: args[6], size: 170, colour: parseHex(args[7]), tracking: 14)
-  let bounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+  // A long label shrinks to the wordmark's width instead of reaching the edge.
+  var line = makeLabelLine(label, fontPath: args[6], size: 170, colour: parseHex(args[7]), tracking: 14)
+  var bounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+  if bounds.width > wordmarkWidth {
+    let fitted = 170 * wordmarkWidth / bounds.width
+    line = makeLabelLine(label, fontPath: args[6], size: fitted, colour: parseHex(args[7]), tracking: 14 * fitted / 170)
+    bounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+  }
   let gap: CGFloat = 70
   let blockHeight = wordmarkHeight + gap + bounds.height
   let blockBottom = tile.midY - blockHeight / 2

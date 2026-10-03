@@ -3,6 +3,7 @@
   "displayName": "nomobodev",
   "bundleId": "de.nomobo.nomobodev.claudi",
   "iconPath": "branding/assets/claudi/icon.icns",
+  "trayIconsDir": "branding/assets/tray-nomobo",
   "updatesEnabled": false,
   "localServer": false,
   "registerDeepLinkProtocol": false,

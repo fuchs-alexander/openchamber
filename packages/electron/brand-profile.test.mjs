@@ -97,11 +97,31 @@ test('missing required fields are rejected by name', () => {
 });
 
 test('rejects a default host that is not plain https or that carries credentials', () => {
-  for (const url of ['http://example.com/', 'https://user:pass@example.com/', 'ftp://example.com/']) {
+  for (const url of ['http://example.com/', 'https://user:pass@example.com/', 'http://user:pass@10.0.0.1/', 'ftp://example.com/']) {
     const raw = validProfile();
     raw.defaultHost.url = url;
     assert.throws(() => parseBrandProfile(raw), /"defaultHost.url"/, url);
   }
+});
+
+test('allows plain http only for private and Tailscale addresses', () => {
+  for (const url of ['http://100.100.6.17:3000/', 'http://10.0.0.5/', 'http://192.168.1.2:3000/', 'http://172.20.0.1/', 'http://127.0.0.1:3000/', 'http://box.tail1234.ts.net/']) {
+    const raw = validProfile();
+    raw.defaultHost.url = url;
+    assert.equal(parseBrandProfile(raw).defaultHost.url, url, url);
+  }
+  for (const url of ['http://8.8.8.8/', 'http://100.128.0.1/', 'http://172.32.0.1/', 'http://example.com/', 'http://ts.net.example.com/']) {
+    const raw = validProfile();
+    raw.defaultHost.url = url;
+    assert.throws(() => parseBrandProfile(raw), /"defaultHost.url"/, url);
+  }
+});
+
+test('an optional tray icon directory is kept as given', () => {
+  const raw = validProfile();
+  assert.equal(parseBrandProfile(raw).trayIconsDir, undefined);
+  raw.trayIconsDir = 'branding/assets/tray-nomobo';
+  assert.equal(parseBrandProfile(raw).trayIconsDir, 'branding/assets/tray-nomobo');
 });
 
 test('rejects credential fields anywhere in a profile', () => {
