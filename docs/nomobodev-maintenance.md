@@ -13,8 +13,10 @@ Dieser Fork baut aus einem Codestand mehrere gebrandete macOS-Apps. Jede App ist
 | `claudi` | `nomobodev` | `de.nomobo.nomobodev.claudi` | `https://openchamber.c.nomobo.de/` | nomobo / DEV auf `#07090E` |
 | `nomobogaming` | `nomobogaming` | `de.nomobo.nomobogaming` | `http://100.100.6.17:3000/` (Tailscale) | nomobo / GAMING auf `#1F1147` |
 | `nomobohosting` | `nomobohosting` | `de.nomobo.nomobohosting` | `https://oc.nomobo.de/` | nomobo / HOSTING auf `#142B49` |
+| `posylka` | `posylka` | `de.nomobo.posylka` | `https://openchamber.colibo.io/` | Posylka.de-Logo auf Weiß |
+| `sofasx` | `sofasx` | `de.nomobo.sofasx` | `https://af.oc.nomobo.de/` | OKES-Logo von mebleokes.com |
 
-Menüleiste: jede App hat ihren Buchstaben in einer Kachel (D, G, H).
+Menüleiste: jede App hat ihren Buchstaben in einer Kachel (D, G, H, P, S). Ein Test stellt sicher, dass keine zwei Profile dasselbe Menüleisten-Icon haben und dass Icon, Menüleisten-Icons und Auswahl-Logo jedes Profils existieren.
 
 ## Was ein Profil steuert
 
@@ -47,7 +49,11 @@ bun install
 OPENCHAMBER_BRAND_PROFILE=claudi bun run electron:build
 OPENCHAMBER_BRAND_PROFILE=nomobogaming bun run electron:build
 OPENCHAMBER_BRAND_PROFILE=nomobohosting bun run electron:build
+OPENCHAMBER_BRAND_PROFILE=posylka bun run electron:build
+OPENCHAMBER_BRAND_PROFILE=sofasx bun run electron:build
 OPENCHAMBER_BRAND_PROFILE=nomobohosting bun run electron:build
+OPENCHAMBER_BRAND_PROFILE=posylka bun run electron:build
+OPENCHAMBER_BRAND_PROFILE=sofasx bun run electron:build
 ```
 
 Ergebnis: `packages/electron/dist/brand-<profil>/mac-arm64/<App>.app`, z. B. `brand-claudi/mac-arm64/nomobodev.app`. Der Build ist ad-hoc signiert und nicht notarisiert. Lokal gebaute Apps tragen kein Quarantäne-Attribut, deshalb startet macOS sie trotzdem. `spctl -a` meldet `rejected`. Das ist erwartet. Eine App, die heruntergeladen oder per AirDrop weitergegeben wird, blockiert Gatekeeper. Für Weitergabe braucht es eine Developer-ID-Signatur und Notarisierung.
@@ -79,6 +85,8 @@ Das Skript kopiert für ein Profil genau einen Eintrag aus den OpenChamber-Einst
 node packages/electron/scripts/import-brand-host.mjs claudi
 node packages/electron/scripts/import-brand-host.mjs nomobogaming
 node packages/electron/scripts/import-brand-host.mjs nomobohosting
+node packages/electron/scripts/import-brand-host.mjs posylka
+node packages/electron/scripts/import-brand-host.mjs sofasx
 ```
 
 Akzeptiert der Server den übernommenen Token nicht mehr (z. B. NomoboHosting am 2026-10-03: auch in OpenChamber abgelaufen), fragt die App beim Start nach dem Passwort. Einmal anmelden und "Trust this device" anhaken.
@@ -119,8 +127,8 @@ Danach jede App wie oben installieren und kurz prüfen: verbindet sie sich, zeig
 ## Weiteres Profil anlegen
 
 1. `branding/profiles/<id>.json` nach dem Muster von `claudi.json` anlegen. Eigener `displayName`, eigene `bundleId`. Der Test `every checked-in profile is valid, credential-free and has its own identity` prüft das.
-2. Icons erzeugen: in `branding/scripts/build-brand-assets.sh` eine Zeile `build_icon <id> '<Hintergrund>' '<zweite Zeile>' '<Buchstabe>' "$tmp/unused-logo.png"` ergänzen und das Skript laufen lassen. Im Profil `"trayIconsDir": "branding/assets/<id>/tray"` setzen. Buchstabe und Farbe dürfen sich mit keiner anderen App überschneiden.
-3. Logo für die Server-Auswahl als PNG unter `packages/ui/src/assets/brand-logos/<logoId>.png` ablegen und im Profil als `defaultHost.brandLogoId` eintragen.
+2. Icons erzeugen: in `branding/scripts/build-brand-assets.sh` ergänzen und das Skript laufen lassen. Für eine nomobo-App `nomobo_icon <id> '<Hintergrund>' '<zweite Zeile>' '<Buchstabe>'`. Für ein fremdes Logo wie Posylka oder Sofasx das Quell-Logo unter `branding/assets/` ablegen, mit `render-brand-assets.swift icon` (Wortmarke auf Farbe) oder `icon-logo` (Logo ist schon eine Kachel) rendern und `finish_profile <id> '<Buchstabe>'` aufrufen. Im Profil `"trayIconsDir": "branding/assets/<id>/tray"` setzen. Buchstabe und Farbe dürfen sich mit keiner anderen App überschneiden.
+3. Logo für die Server-Auswahl als PNG unter `packages/ui/src/assets/brand-logos/<logoId>.png` erzeugen (im Build-Skript, etwa 61 px hoch bzw. 105 px quadratisch) und im Profil als `defaultHost.brandLogoId` eintragen.
 4. Tests laufen lassen, bauen, Zugang mit `import-brand-host.mjs <id>` übernehmen.
 
 ## Logo-Herkunft
@@ -128,6 +136,10 @@ Danach jede App wie oben installieren und kurz prüfen: verbindet sie sich, zeig
 `branding/assets/nomobo-wordmark.png` ist das Header-Logo von nomobo.de, unverändert heruntergeladen von `https://nomobo.de/media/img_6a4f79ac9cabe8.65603421_1783593388.png` (318×61, SHA-256 `258a56e7d0cc41f34c4c062adcd8c934e43fed1b01abff8f4f68ea3756d54d41`). Die Hintergrundfarbe `#07090E` stammt aus `--header-bg-rgb` im CSS von nomobo.de. `branding/scripts/build-brand-assets.sh` erzeugt daraus `branding/assets/claudi/icon.icns` und `packages/ui/src/assets/brand-logos/nomobo.png`. Die Wortmarke wird nur skaliert und platziert, nicht nachgezeichnet. Das App-Icon trägt unter der Wortmarke die zweite Zeile "DEV", damit es sich von anderen nomobo-Apps unterscheidet. Gesetzt ist sie in Poppins SemiBold, der Schrift von nomobo.de (`branding/assets/fonts/`, SIL Open Font License, Quelle `github.com/google/fonts/ofl/poppins`), in `#F5F2EF` (`--header-text-color` von nomobo.de). NomoboGaming hat "GAMING" auf `#1F1147`, NomoboHosting "HOSTING" auf `#142B49`, dem Navy des Hosting-Ordnericons aus `nomobo-hosting/assets/folder-icon.svg`. Ist eine zweite Zeile breiter als die Wortmarke, wird sie verkleinert. Das Logo in der Server-Auswahl bleibt die reine Wortmarke auf `#07090E`.
 
 Die Menüleisten-Icons (`branding/assets/<id>/tray/`) zeigen je einen Buchstaben in Poppins SemiBold in einer Umriss-Kachel, erzeugt von `render-tray-icons.swift`. Die Füllstufen für Ruhe, Ungelesen und Beschäftigt-Animation stammen aus den Upstream-Icons.
+
+Posylka: `branding/assets/posylka-logo.svg` ist das Vektor-Logo von `https://posylka.de/images/logo-2021.svg` (SHA-256 `29b81f8f7e5ba8aaf1a49413877f2aa8417ecd01f6d699ab977bec95979f2f8e`), unverändert auf weißer Kachel.
+
+Sofasx: `branding/assets/okes-logo.webp` ist das Header-Logo von mebleokes.com (`https://mebleokes.com/media/img_699af1fec25197.22679346_1771762174.webp`, 189×189, SHA-256 `485ad05d5f2002ca8ef9ed207ec75688889ffd75a966866077e08902a290ad8b`). Eine größere Fassung liefert die Website nicht, deshalb ist das Dock-Icon etwas weich. Eine hochaufgelöste Datei kann die Quelle ersetzen; danach das Build-Skript laufen lassen und neu bauen.
 
 ## Bekannte Grenzen
 

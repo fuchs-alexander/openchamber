@@ -1,0 +1,16 @@
+{
+  "profileId": "sofasx",
+  "displayName": "sofasx",
+  "bundleId": "de.nomobo.sofasx",
+  "iconPath": "branding/assets/sofasx/icon.icns",
+  "trayIconsDir": "branding/assets/sofasx/tray",
+  "updatesEnabled": false,
+  "localServer": false,
+  "registerDeepLinkProtocol": false,
+  "defaultHost": {
+    "id": "sofasx",
+    "label": "Sofasx",
+    "url": "https://af.oc.nomobo.de/",
+    "brandLogoId": "okes"
+  }
+}

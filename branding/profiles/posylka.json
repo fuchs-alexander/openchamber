@@ -1,0 +1,16 @@
+{
+  "profileId": "posylka",
+  "displayName": "posylka",
+  "bundleId": "de.nomobo.posylka",
+  "iconPath": "branding/assets/posylka/icon.icns",
+  "trayIconsDir": "branding/assets/posylka/tray",
+  "updatesEnabled": false,
+  "localServer": false,
+  "registerDeepLinkProtocol": false,
+  "defaultHost": {
+    "id": "posylka",
+    "label": "Posylka",
+    "url": "https://openchamber.colibo.io/",
+    "brandLogoId": "posylka"
+  }
+}

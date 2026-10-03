@@ -71,6 +71,30 @@ test('every checked-in profile is valid, credential-free and has its own identit
   }
 });
 
+test('every checked-in profile has its icon, menu bar icons and switcher logo', () => {
+  const repoRoot = path.resolve(repoProfilesDir, '..', '..');
+  const trayLetters = new Map();
+  for (const file of fs.readdirSync(repoProfilesDir).filter((name) => name.endsWith('.json'))) {
+    const profile = resolveBrandProfile(path.basename(file, '.json'), { profilesDir: repoProfilesDir });
+    assert.ok(fs.existsSync(path.join(repoRoot, profile.iconPath)), `${profile.profileId}: ${profile.iconPath}`);
+    if (profile.trayIconsDir) {
+      for (const name of ['trayTemplate-idle', 'trayTemplate-unseen', 'trayTemplate-breath-15']) {
+        for (const suffix of ['.png', '@2x.png']) {
+          const icon = path.join(repoRoot, profile.trayIconsDir, `${name}${suffix}`);
+          assert.ok(fs.existsSync(icon), `${profile.profileId}: ${icon}`);
+        }
+      }
+      const idle = fs.readFileSync(path.join(repoRoot, profile.trayIconsDir, 'trayTemplate-idle@2x.png')).toString('base64');
+      assert.equal(trayLetters.has(idle), false, `${profile.profileId} shares its menu bar icon with ${trayLetters.get(idle)}`);
+      trayLetters.set(idle, profile.profileId);
+    }
+    if (profile.defaultHost.brandLogoId) {
+      const logo = path.join(repoRoot, 'packages', 'ui', 'src', 'assets', 'brand-logos', `${profile.defaultHost.brandLogoId}.png`);
+      assert.ok(fs.existsSync(logo), `${profile.profileId}: ${logo}`);
+    }
+  }
+});
+
 test('an unknown profile is an explicit error', () => {
   assert.throws(
     () => resolveBrandProfile('does-not-exist', { profilesDir: repoProfilesDir }),

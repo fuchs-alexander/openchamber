@@ -1,13 +1,17 @@
-// Renders the branded app icon and the host-switcher logo from an unmodified
-// source wordmark. The wordmark itself is never redrawn: it is only scaled and
-// placed on the brand's background colour.
+// Renders branded app icons and host-switcher logos from unmodified source
+// logos. Source artwork is never redrawn: it is only scaled and placed.
 //
 // Usage:
-//   swift branding/scripts/render-brand-assets.swift <wordmark.png> <hex-bg> <icon-1024.png> <logo.png> \
-//     [<icon-label> <font.ttf> <hex-label-colour>]
+//   render-brand-assets.swift icon <wordmark> <hex-bg> <icon-1024.png> [<label> <font.ttf> <hex-label-colour>]
+//       Wordmark centred on a tile in the background colour; the optional label
+//       is a second line, so apps sharing a wordmark stay distinguishable.
+//   render-brand-assets.swift icon-logo <logo> <icon-1024.png>
+//       A square logo that already is a tile, placed on the macOS icon grid.
+//   render-brand-assets.swift logo <wordmark> <hex-bg> <logo.png> [<height>]
+//       Host-switcher logo: the wordmark on a rounded pill, optionally scaled to
+//       <height> pixels, so it stays legible on light and dark themes.
 //
-// The optional label is set as a second line under the wordmark on the app
-// icon only, so apps built from the same wordmark stay distinguishable.
+// Sources may be PNG/WebP or SVG (rasterised at 2400 px width).
 
 import AppKit
 import CoreGraphics
@@ -22,11 +26,19 @@ func fail(_ message: String) -> Never {
 }
 
 let args = CommandLine.arguments
-guard args.count == 5 || args.count == 8 else {
-  fail("usage: render-brand-assets.swift <wordmark.png> <hex-bg> <icon-1024.png> <logo.png> [<icon-label> <font.ttf> <hex-label-colour>]")
+func usage() -> Never {
+  fail("usage: render-brand-assets.swift icon <wordmark> <hex-bg> <out.png> [<label> <font.ttf> <hex-colour>] | icon-logo <logo> <out.png> | logo <wordmark> <hex-bg> <out.png> [<height>]")
 }
+guard args.count >= 2 else { usage() }
 
 func loadImage(_ path: String) -> CGImage {
+  if path.lowercased().hasSuffix(".svg") {
+    guard let svg = NSImage(contentsOfFile: path), svg.size.width > 0 else { fail("cannot read SVG at \(path)") }
+    let width = 2400, height = Int((2400 * svg.size.height / svg.size.width).rounded())
+    var rect = CGRect(x: 0, y: 0, width: width, height: height)
+    guard let image = svg.cgImage(forProposedRect: &rect, context: nil, hints: nil) else { fail("cannot rasterise \(path)") }
+    return image
+  }
   guard let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil),
         let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
     fail("cannot read image at \(path)")
@@ -84,52 +96,66 @@ func makeLabelLine(_ text: String, fontPath: String, size: CGFloat, colour: CGCo
   return CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
 }
 
-let wordmark = loadImage(args[1])
-let background = parseHex(args[2])
-let label = args.count == 8 ? args[5] : nil
-
 // macOS app icon grid: 824pt rounded square centred on a 1024pt canvas.
-let icon = render(width: 1024, height: 1024) { context in
-  let tile = CGRect(x: 100, y: 100, width: 824, height: 824)
-  context.addPath(CGPath(roundedRect: tile, cornerWidth: 185, cornerHeight: 185, transform: nil))
-  context.setFillColor(background)
-  context.fillPath()
-  guard let label else {
-    drawWordmark(wordmark, in: context, centeredIn: tile, width: 640)
-    return
-  }
-  // Two lines: wordmark, then the label, centred as one block.
-  let wordmarkWidth: CGFloat = 600
-  let wordmarkHeight = CGFloat(wordmark.height) * wordmarkWidth / CGFloat(wordmark.width)
-  // A long label shrinks to the wordmark's width instead of reaching the edge.
-  var line = makeLabelLine(label, fontPath: args[6], size: 170, colour: parseHex(args[7]), tracking: 14)
-  var bounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
-  if bounds.width > wordmarkWidth {
-    let fitted = 170 * wordmarkWidth / bounds.width
-    line = makeLabelLine(label, fontPath: args[6], size: fitted, colour: parseHex(args[7]), tracking: 14 * fitted / 170)
-    bounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
-  }
-  let gap: CGFloat = 70
-  let blockHeight = wordmarkHeight + gap + bounds.height
-  let blockBottom = tile.midY - blockHeight / 2
-  let labelX = tile.midX - bounds.width / 2 - bounds.minX
-  context.textPosition = CGPoint(x: labelX, y: blockBottom - bounds.minY)
-  CTLineDraw(line, context)
-  let wordmarkRect = CGRect(x: tile.midX - wordmarkWidth / 2, y: blockBottom + bounds.height + gap, width: wordmarkWidth, height: wordmarkHeight)
-  context.draw(wordmark, in: wordmarkRect)
-}
-writePNG(icon, to: args[3])
+let tile = CGRect(x: 100, y: 100, width: 824, height: 824)
 
-// Host-switcher logo: the wordmark at its native size on a rounded pill, so it
-// stays legible on light and dark themes.
-let padX = 28, padY = 22
-let logoWidth = wordmark.width + padX * 2
-let logoHeight = wordmark.height + padY * 2
-let logo = render(width: logoWidth, height: logoHeight) { context in
-  let rect = CGRect(x: 0, y: 0, width: logoWidth, height: logoHeight)
-  context.addPath(CGPath(roundedRect: rect, cornerWidth: 24, cornerHeight: 24, transform: nil))
-  context.setFillColor(background)
-  context.fillPath()
-  context.draw(wordmark, in: CGRect(x: padX, y: padY, width: wordmark.width, height: wordmark.height))
+func renderIcon(wordmark: CGImage, background: CGColor, label: (text: String, fontPath: String, colour: CGColor)?) -> CGImage {
+  render(width: 1024, height: 1024) { context in
+    context.addPath(CGPath(roundedRect: tile, cornerWidth: 185, cornerHeight: 185, transform: nil))
+    context.setFillColor(background)
+    context.fillPath()
+    guard let label else {
+      drawWordmark(wordmark, in: context, centeredIn: tile, width: 640)
+      return
+    }
+    // Two lines: wordmark, then the label, centred as one block.
+    let wordmarkWidth: CGFloat = 600
+    let wordmarkHeight = CGFloat(wordmark.height) * wordmarkWidth / CGFloat(wordmark.width)
+    // A long label shrinks to the wordmark's width instead of reaching the edge.
+    var line = makeLabelLine(label.text, fontPath: label.fontPath, size: 170, colour: label.colour, tracking: 14)
+    var bounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+    if bounds.width > wordmarkWidth {
+      let fitted = 170 * wordmarkWidth / bounds.width
+      line = makeLabelLine(label.text, fontPath: label.fontPath, size: fitted, colour: label.colour, tracking: 14 * fitted / 170)
+      bounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+    }
+    let gap: CGFloat = 70
+    let blockHeight = wordmarkHeight + gap + bounds.height
+    let blockBottom = tile.midY - blockHeight / 2
+    let labelX = tile.midX - bounds.width / 2 - bounds.minX
+    context.textPosition = CGPoint(x: labelX, y: blockBottom - bounds.minY)
+    CTLineDraw(line, context)
+    let wordmarkRect = CGRect(x: tile.midX - wordmarkWidth / 2, y: blockBottom + bounds.height + gap, width: wordmarkWidth, height: wordmarkHeight)
+    context.draw(wordmark, in: wordmarkRect)
+  }
 }
-writePNG(logo, to: args[4])
+
+func renderLogoPill(wordmark: CGImage, background: CGColor, height: Int?) -> CGImage {
+  let scale = height.map { CGFloat($0) / CGFloat(wordmark.height) } ?? 1
+  let markWidth = Int((CGFloat(wordmark.width) * scale).rounded())
+  let markHeight = Int((CGFloat(wordmark.height) * scale).rounded())
+  let padX = 28, padY = 22
+  let logoWidth = markWidth + padX * 2
+  let logoHeight = markHeight + padY * 2
+  return render(width: logoWidth, height: logoHeight) { context in
+    let rect = CGRect(x: 0, y: 0, width: logoWidth, height: logoHeight)
+    context.addPath(CGPath(roundedRect: rect, cornerWidth: 24, cornerHeight: 24, transform: nil))
+    context.setFillColor(background)
+    context.fillPath()
+    context.draw(wordmark, in: CGRect(x: padX, y: padY, width: markWidth, height: markHeight))
+  }
+}
+
+switch args[1] {
+case "icon" where args.count == 5 || args.count == 8:
+  let label = args.count == 8 ? (text: args[5], fontPath: args[6], colour: parseHex(args[7])) : nil
+  writePNG(renderIcon(wordmark: loadImage(args[2]), background: parseHex(args[3]), label: label), to: args[4])
+case "icon-logo" where args.count == 4:
+  let logo = loadImage(args[2])
+  writePNG(render(width: 1024, height: 1024) { $0.draw(logo, in: tile) }, to: args[3])
+case "logo" where args.count == 5 || args.count == 6:
+  let height = args.count == 6 ? Int(args[5]) : nil
+  writePNG(renderLogoPill(wordmark: loadImage(args[2]), background: parseHex(args[3]), height: height), to: args[4])
+default:
+  usage()
+}

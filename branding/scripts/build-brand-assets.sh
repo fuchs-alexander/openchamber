@@ -1,31 +1,26 @@
 #!/bin/sh
-# Regenerates all nomobo branding assets from the unmodified nomobo.de sources.
-# macOS only (swift, sips, iconutil).
+# Regenerates all branding assets from the unmodified source logos in
+# branding/assets. macOS only (swift, sips, iconutil).
 #
-# - App icons per profile: wordmark plus a second line on the profile's
-#   background colour (branding/assets/<profile>/icon.icns + icon-1024.png).
-# - Host-switcher logo "nomobo": the plain wordmark.
-# - Menu bar icons per profile: one letter in a tile (branding/assets/<profile>/tray).
+# Per profile: app icon (branding/assets/<profile>/icon.icns + icon-1024.png)
+# and menu bar icons (branding/assets/<profile>/tray, one letter per app).
+# Shared: host-switcher logos in packages/ui/src/assets/brand-logos.
 set -eu
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
-wordmark="$root/branding/assets/nomobo-wordmark.png"
-font="$root/branding/assets/fonts/Poppins-SemiBold.ttf"
+assets="$root/branding/assets"
+render="$root/branding/scripts/render-brand-assets.swift"
+font="$assets/fonts/Poppins-SemiBold.ttf"
 label_colour='#F5F2EF'
-logo="$root/packages/ui/src/assets/brand-logos/nomobo.png"
+logos="$root/packages/ui/src/assets/brand-logos"
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-# profile id, icon background, second line, menu bar letter, where the switcher
-# logo goes. The logo is drawn on the icon background, so only the #07090E run
-# keeps it.
-build_icon() {
-  profile=$1 background=$2 label=$3 tray_letter=$4 logo_out=$5
-  out="$root/branding/assets/$profile"
-  mkdir -p "$out"
-  swift "$root/branding/scripts/render-brand-assets.swift" "$wordmark" "$background" "$out/icon-1024.png" "$logo_out" \
-    "$label" "$font" "$label_colour"
+# profile id, menu bar letter; expects $assets/<profile>/icon-1024.png
+finish_profile() {
+  profile=$1 tray_letter=$2
+  out="$assets/$profile"
   iconset="$tmp/$profile.iconset"
   mkdir "$iconset"
   for size in 16 32 128 256 512; do
@@ -38,8 +33,32 @@ build_icon() {
   echo "wrote $out/icon.icns and $out/tray"
 }
 
-build_icon claudi '#07090E' 'DEV' 'D' "$logo"
-build_icon nomobogaming '#1F1147' 'GAMING' 'G' "$tmp/unused-logo.png"
+# nomobo apps: wordmark plus a second line on the profile's background.
+nomobo_icon() {
+  profile=$1 background=$2 label=$3 tray_letter=$4
+  mkdir -p "$assets/$profile"
+  swift "$render" icon "$assets/nomobo-wordmark.png" "$background" "$assets/$profile/icon-1024.png" \
+    "$label" "$font" "$label_colour"
+  finish_profile "$profile" "$tray_letter"
+}
+
+nomobo_icon claudi '#07090E' 'DEV' 'D'
+nomobo_icon nomobogaming '#1F1147' 'GAMING' 'G'
 # Navy of the nomobo-hosting folder icon (nomobo-hosting/assets/folder-icon.svg).
-build_icon nomobohosting '#142B49' 'HOSTING' 'H' "$tmp/unused-logo.png"
-echo "wrote $logo"
+nomobo_icon nomobohosting '#142B49' 'HOSTING' 'H'
+
+# Posylka: the posylka.de wordmark (SVG) on white; the only Posylka app, so no second line.
+mkdir -p "$assets/posylka"
+swift "$render" icon "$assets/posylka-logo.svg" '#FFFFFF' "$assets/posylka/icon-1024.png"
+finish_profile posylka 'P'
+
+# Sofasx: the mebleokes.com OKES logo already is a tile and becomes the icon.
+mkdir -p "$assets/sofasx"
+swift "$render" icon-logo "$assets/okes-logo.webp" "$assets/sofasx/icon-1024.png"
+finish_profile sofasx 'S'
+
+# Host-switcher logos, about 61 px high to match the nomobo wordmark.
+swift "$render" logo "$assets/nomobo-wordmark.png" '#07090E' "$logos/nomobo.png"
+swift "$render" logo "$assets/posylka-logo.svg" '#FFFFFF' "$logos/posylka.png" 61
+sips -s format png -z 105 105 "$assets/okes-logo.webp" --out "$logos/okes.png" >/dev/null
+echo "wrote host-switcher logos to $logos"
