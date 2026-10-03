@@ -141,6 +141,58 @@ describe('desktop host runtime headers', () => {
   });
 });
 
+describe('desktop host brand logos', () => {
+  const hostsWith = (extra: Record<string, unknown>) => ({
+    hosts: [
+      { id: 'claudi', label: 'Claudi', url: 'https://claudi.example', ...extra },
+      { id: 'plain', label: 'Plain', url: 'https://plain.example' },
+    ],
+    defaultHostId: 'claudi',
+    initialHostChoiceCompleted: true,
+  });
+
+  test('reads a logo id and leaves hosts without one unchanged', async () => {
+    await withDesktopBridge(async () => hostsWith({ brandLogoId: 'nomobo' }), async () => {
+      const config = await desktopHostsGet();
+      expect(config.hosts[0]?.brandLogoId).toBe('nomobo');
+      expect(config.hosts[1]).toEqual({ id: 'plain', label: 'Plain', url: 'https://plain.example' });
+    });
+  });
+
+  test('drops logo values that are not plain identifiers', async () => {
+    for (const brandLogoId of ['https://evil.example/logo.png', '../x', '<img>', 42]) {
+      await withDesktopBridge(async () => hostsWith({ brandLogoId }), async () => {
+        const config = await desktopHostsGet();
+        expect(config.hosts[0]?.brandLogoId).toBeUndefined();
+      });
+    }
+  });
+
+  test('a loaded logo id survives saving the host list', async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    await withDesktopBridge(async (cmd, args) => {
+      if (cmd === 'desktop_hosts_get') return hostsWith({ brandLogoId: 'nomobo' });
+      calls.push(args);
+      return null;
+    }, async () => {
+      const config = await desktopHostsGet();
+      await desktopHostsSet({ hosts: config.hosts, defaultHostId: config.defaultHostId });
+    });
+    const input = calls[0]?.input as { hosts: Array<{ brandLogoId?: string }> };
+    expect(input.hosts[0]?.brandLogoId).toBe('nomobo');
+  });
+
+  test('reports whether the desktop shell runs a local instance', async () => {
+    await withDesktopBridge(async () => ({ ...hostsWith({}), localAvailable: false }), async () => {
+      expect((await desktopHostsGet()).localAvailable).toBe(false);
+    });
+    // Older shells do not report it; they always run the local instance.
+    await withDesktopBridge(async () => hostsWith({}), async () => {
+      expect((await desktopHostsGet()).localAvailable).toBe(true);
+    });
+  });
+});
+
 describe('probeRelayDesktopHost', () => {
   const relay: DesktopHostRelay = {
     relayUrl: 'wss://relay.example',

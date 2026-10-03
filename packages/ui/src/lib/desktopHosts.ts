@@ -51,6 +51,8 @@ export type DesktopHost = {
   requestHeaders?: Record<string, string>;
   /** When set, this host is reached over the private relay tunnel. */
   relay?: DesktopHostRelay;
+  /** Id of a logo bundled with the UI (see `brandLogos.ts`), set by branded desktop builds. */
+  brandLogoId?: string;
 };
 
 /** Display-only pseudo-URL for a relay host (never fetched). */
@@ -70,6 +72,8 @@ export type DesktopHostsConfig = {
   defaultHostId: string | null;
   initialHostChoiceCompleted: boolean;
   localOrigin?: string | null;
+  /** False when the desktop shell runs without a local instance; the switcher then omits Local. */
+  localAvailable: boolean;
 };
 
 /** Backward-compatible input type — callers may omit `initialHostChoiceCompleted`. */
@@ -313,6 +317,13 @@ const readNumber = (obj: Record<string, unknown>, key: string): number | null =>
   return typeof val === 'number' && Number.isFinite(val) ? val : null;
 };
 
+const BRAND_LOGO_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,31}$/;
+
+const parseBrandLogoId = (value: Record<string, unknown>): string | null => {
+  const id = readString(value, 'brandLogoId')?.trim() ?? '';
+  return BRAND_LOGO_ID_PATTERN.test(id) ? id : null;
+};
+
 const parseHost = (value: unknown): DesktopHost | null => {
   if (!isRecord(value)) return null;
   const id = readString(value, 'id');
@@ -322,8 +333,9 @@ const parseHost = (value: unknown): DesktopHost | null => {
   const clientToken = readString(value, 'clientToken') || readString(value, 'client_token');
   const requestHeaders = sanitizeRequestHeaders(value.requestHeaders);
   const relay = parseHostRelay(value.relay);
+  const brandLogoId = parseBrandLogoId(value);
   if (!id || !label || !url) return null;
-  return {
+  const host: DesktopHost = {
     id,
     label,
     url,
@@ -332,6 +344,8 @@ const parseHost = (value: unknown): DesktopHost | null => {
     ...(requestHeaders ? { requestHeaders } : {}),
     ...(relay ? { relay } : {}),
   };
+  if (brandLogoId) host.brandLogoId = brandLogoId;
+  return host;
 };
 
 export const getDesktopHostApiUrl = (host: DesktopHost): string => {
@@ -346,12 +360,12 @@ const getInvoke = (): DesktopInvoke | null => {
 export const desktopHostsGet = async (): Promise<DesktopHostsConfig> => {
   const invoke = getInvoke();
   if (!invoke) {
-    return { hosts: [], defaultHostId: 'local', initialHostChoiceCompleted: false };
+    return { hosts: [], defaultHostId: 'local', initialHostChoiceCompleted: false, localAvailable: true };
   }
 
   const raw = await invoke('desktop_hosts_get');
   if (!isRecord(raw)) {
-    return { hosts: [], defaultHostId: null, initialHostChoiceCompleted: false };
+    return { hosts: [], defaultHostId: null, initialHostChoiceCompleted: false, localAvailable: true };
   }
 
   const hostsRaw = raw.hosts;
@@ -367,8 +381,9 @@ export const desktopHostsGet = async (): Promise<DesktopHostsConfig> => {
   const initialHostChoiceCompleted =
     raw.initialHostChoiceCompleted === true || raw.initial_host_choice_completed === true;
   const localOrigin = readString(raw, 'localOrigin') || readString(raw, 'local_origin');
+  const localAvailable = raw.localAvailable !== false;
 
-  return { hosts, defaultHostId, initialHostChoiceCompleted, localOrigin };
+  return { hosts, defaultHostId, initialHostChoiceCompleted, localOrigin, localAvailable };
 };
 
 export const desktopHostsSet = async (config: DesktopHostsConfigInput): Promise<void> => {

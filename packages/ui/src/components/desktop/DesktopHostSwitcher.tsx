@@ -47,6 +47,7 @@ import {
   type DesktopHostStatus,
 } from '@/lib/desktopHostStatus';
 import { scheduleDesktopHostCandidateRefresh } from '@/lib/desktopRelayRestore';
+import { HostBrandLogo } from '@/components/desktop/HostBrandLogo';
 import { adoptRelayTunnel } from '@/lib/relay/runtime-tunnel';
 import { createRelayTunnelClient } from '@/lib/relay/tunnel-client';
 import { subscribeRuntimeEndpointChanged, switchRuntimeEndpoint } from '@/lib/runtime-switch';
@@ -278,6 +279,7 @@ export function DesktopHostSwitcherDialog({
   });
   const [error, setError] = React.useState<string>('');
   const [localOrigin, setLocalOrigin] = React.useState<string>(() => getLocalDesktopOrigin());
+  const [localAvailable, setLocalAvailable] = React.useState(true);
 
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editLabel, setEditLabel] = React.useState('');
@@ -287,13 +289,13 @@ export function DesktopHostSwitcherDialog({
   const sshSwitchTokenRef = React.useRef(0);
 
   const allHosts = React.useMemo(() => {
-    const local = buildLocalDesktopHost(localOrigin);
     const normalizedRemote = configHosts.map((h) => ({
       ...h,
       url: normalizeHostUrl(h.url) || h.url,
     }));
-    return [local, ...normalizedRemote];
-  }, [configHosts, localOrigin]);
+    // A shell started without a local instance has nothing to switch to there.
+    return localAvailable ? [buildLocalDesktopHost(localOrigin), ...normalizedRemote] : normalizedRemote;
+  }, [configHosts, localAvailable, localOrigin]);
 
   React.useEffect(() => {
     return subscribeRuntimeEndpointChanged(() => setRuntimeEndpointEpoch((epoch) => epoch + 1));
@@ -343,6 +345,7 @@ export function DesktopHostSwitcherDialog({
       if (cfg.localOrigin) {
         setLocalOrigin(cfg.localOrigin);
       }
+      setLocalAvailable(cfg.localAvailable);
       const nextSshHostIds: Record<string, true> = {};
       for (const instance of sshCfg.instances) {
         nextSshHostIds[instance.id] = true;
@@ -878,6 +881,7 @@ export function DesktopHostSwitcherDialog({
                           then the address. */}
                       <div className="flex-1 min-w-0 space-y-0.5">
                         <div className="flex min-w-0 items-center gap-1.5">
+                          <HostBrandLogo brandLogoId={host.brandLogoId} />
                           <span className="typography-ui-label font-medium truncate text-foreground">
                             {displayLabel}
                           </span>

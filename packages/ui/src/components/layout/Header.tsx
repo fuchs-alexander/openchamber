@@ -48,6 +48,7 @@ import {
 import type { SessionContextUsage } from '@/stores/types/sessionTypes';
 import { isSameContextUsage } from '@/stores/utils/tokenUtils';
 import { DesktopHostSwitcherDialog } from '@/components/desktop/DesktopHostSwitcher';
+import { HostBrandLogo } from '@/components/desktop/HostBrandLogo';
 import { OpenInAppButton } from '@/components/desktop/OpenInAppButton';
 import { ProjectActionsButton } from '@/components/layout/ProjectActionsButton';
 import { SpaceAccessButton } from '@/components/session/spaces/SpaceAccessButton';
@@ -139,6 +140,7 @@ const HeaderIconActionButton = React.memo(function HeaderIconActionButton({
 type DesktopServicesMenuProps = {
   isDesktopApp: boolean;
   currentInstanceLabel: string;
+  currentInstanceLogoId: string | undefined;
   currentInstanceIsLocal: boolean;
   isDesktopServicesOpen: boolean;
   setIsDesktopServicesOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -153,6 +155,7 @@ type DesktopServicesMenuProps = {
 const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
   isDesktopApp,
   currentInstanceLabel,
+  currentInstanceLogoId,
   currentInstanceIsLocal,
   isDesktopServicesOpen,
   setIsDesktopServicesOpen,
@@ -187,7 +190,9 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
                 isDesktopApp ? 'w-auto max-w-[20rem] justify-start gap-1.5 px-2.5' : 'h-8 w-8'
               )}
             >
-              <Icon name="server" className="h-[18px] w-[18px]" />
+              {isDesktopApp && currentInstanceLogoId
+                ? <HostBrandLogo brandLogoId={currentInstanceLogoId} />
+                : <Icon name="server" className="h-[18px] w-[18px]" />}
               {isDesktopApp ? (
                 <span className="truncate typography-ui-label font-medium text-foreground">{currentInstanceLabel}</span>
               ) : null}
@@ -409,6 +414,7 @@ export const Header: React.FC = () => {
 
   const [isDesktopServicesOpen, setIsDesktopServicesOpen] = React.useState(false);
   const [currentInstanceLabel, setCurrentInstanceLabel] = React.useState('Local');
+  const [currentInstanceLogoId, setCurrentInstanceLogoId] = React.useState<string | undefined>(undefined);
   const [currentInstanceIsLocal, setCurrentInstanceIsLocal] = React.useState(true);
   const [remoteUpdateDialogOpen, setRemoteUpdateDialogOpen] = React.useState(false);
   const [remoteUpdateInfo, setRemoteUpdateInfo] = React.useState<UpdateInfo | null>(null);
@@ -451,6 +457,7 @@ export const Header: React.FC = () => {
 
     try {
       if (isDesktopLocalOriginActive()) {
+        setCurrentInstanceLogoId(undefined);
         setCurrentInstanceLabel('Local');
         setCurrentInstanceIsLocal(true);
         return;
@@ -464,13 +471,16 @@ export const Header: React.FC = () => {
       const resolved = resolveCurrentDesktopHost([buildLocalDesktopHost(localOrigin), ...cfg.hosts]);
 
       if (resolved.id === LOCAL_HOST_ID) {
+        setCurrentInstanceLogoId(undefined);
         setCurrentInstanceLabel('Local');
         setCurrentInstanceIsLocal(true);
         return;
       }
 
       setCurrentInstanceLabel(redactSensitiveUrl(resolved.label.trim() || 'Instance'));
+      setCurrentInstanceLogoId(cfg.hosts.find((host) => host.id === resolved.id)?.brandLogoId);
     } catch {
+      setCurrentInstanceLogoId(undefined);
       setCurrentInstanceLabel('Local');
       setCurrentInstanceIsLocal(true);
     }
@@ -1279,6 +1289,7 @@ export const Header: React.FC = () => {
       <DesktopServicesMenu
         isDesktopApp={isDesktopApp}
         currentInstanceLabel={currentInstanceLabel}
+        currentInstanceLogoId={currentInstanceLogoId}
         currentInstanceIsLocal={currentInstanceIsLocal}
         isDesktopServicesOpen={isDesktopServicesOpen}
         setIsDesktopServicesOpen={setIsDesktopServicesOpen}
