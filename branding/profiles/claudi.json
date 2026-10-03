@@ -1,0 +1,15 @@
+{
+  "profileId": "claudi",
+  "displayName": "nomobodev",
+  "bundleId": "de.nomobo.nomobodev.claudi",
+  "iconPath": "branding/assets/claudi/icon.icns",
+  "updatesEnabled": false,
+  "localServer": false,
+  "registerDeepLinkProtocol": false,
+  "defaultHost": {
+    "id": "claudi",
+    "label": "Claudi",
+    "url": "https://openchamber.c.nomobo.de/",
+    "brandLogoId": "nomobo"
+  }
+}

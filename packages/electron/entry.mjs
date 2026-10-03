@@ -9,11 +9,14 @@
  */
 
 import { app, protocol } from 'electron';
+import os from 'node:os';
 import path from 'node:path';
 import { shouldIgnoreLoopbackConnectionLimit } from './startup-url-selection.mjs';
+import { brandRuntimePaths } from './brand-profile.mjs';
 import {
   APP_USER_MODEL_ID,
   UI_PROTOCOL,
+  activeBrandProfile,
   createEarlyWindow,
   deferAppEventsUntilMainLoads,
   isDev,
@@ -27,11 +30,28 @@ recordEarlyStartupMark('electron.entry');
 
 // Set the product name early so electron-log derives its log directory as
 // ~/Library/Logs/OpenChamber/ (not ~/Library/Logs/@openchamber/electron/).
-app.setName('OpenChamber');
-if (process.platform === 'linux') {
+app.setName(activeBrandProfile?.displayName || 'OpenChamber');
+if (process.platform === 'linux' && !activeBrandProfile) {
   app.setDesktopName('openchamber.desktop');
 }
-if (isDev) {
+if (activeBrandProfile) {
+  // A branded app gets its own Electron profile (and with it its own
+  // single-instance lock) and its own settings directory, so it runs next to
+  // an installed OpenChamber without sharing state. These must be set before
+  // the lock below and before anything reads settings.
+  const brandPaths = brandRuntimePaths(activeBrandProfile, {
+    appDataDir: app.getPath('appData'),
+    homeDir: os.homedir(),
+    development: isDev,
+  });
+  app.setPath('userData', brandPaths.userDataDir);
+  if (!String(process.env.OPENCHAMBER_DATA_DIR || '').trim()) {
+    process.env.OPENCHAMBER_DATA_DIR = brandPaths.dataDir;
+  }
+  if (!activeBrandProfile.localServer) {
+    process.env.OPENCHAMBER_SKIP_LOCAL_SERVER = '1';
+  }
+} else if (isDev) {
   app.setPath('userData', path.join(app.getPath('appData'), 'OpenChamber Dev'));
 }
 // Test hook for scripts/profile-startup.mjs: a packaged launch that must not

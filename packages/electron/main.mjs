@@ -23,6 +23,7 @@ import {
   MIN_WINDOW_HEIGHT,
   MIN_WINDOW_WIDTH,
   UI_PROTOCOL,
+  activeBrandProfile,
   buildMainWindowOptions,
   buildRendererAdditionalArguments,
   buildStartupSplashUrl,
@@ -51,6 +52,7 @@ import {
   wasEarlyWindowClosed,
 } from './early-startup.mjs';
 import { sanitizeRuntimeRequestHeaders } from './runtime-request-headers.mjs';
+import { sanitizeBrandLogoId, seedBrandDefaultHost } from './brand-profile.mjs';
 import { probeDirectHostWithRetry } from './host-probe-policy.mjs';
 import { probeElectronHostWithDeadline } from './electron-host-probe.mjs';
 import { assertUpdaterCapability } from './updater-capability.mjs';
@@ -162,8 +164,14 @@ try {
 } catch {
 }
 
+// Branded builds whose profile disables updates never configure or contact the
+// upstream release feed; they are replaced manually.
+const updatesEnabled = activeBrandProfile?.updatesEnabled !== false;
+
+// A branded build must not take the openchamber:// handler away from an
+// installed OpenChamber.
 try {
-  if (!app.isDefaultProtocolClient(DEEP_LINK_PROTOCOL)) {
+  if (activeBrandProfile?.registerDeepLinkProtocol !== false && !app.isDefaultProtocolClient(DEEP_LINK_PROTOCOL)) {
     app.setAsDefaultProtocolClient(DEEP_LINK_PROTOCOL);
   }
 } catch (error) {
@@ -717,6 +725,8 @@ const buildStoredHostEntry = (entry) => {
   const headerFields = Object.keys(requestHeaders).length > 0 ? { requestHeaders } : {};
   const tokenField = clientToken ? { clientToken } : {};
   const labelRaw = typeof entry?.label === 'string' && entry.label.trim() ? entry.label.trim() : '';
+  const brandLogoId = sanitizeBrandLogoId(entry?.brandLogoId);
+  const logoField = brandLogoId ? { brandLogoId } : {};
 
   const relay = sanitizeHostRelayForStorage(entry?.relay);
   const relayField = relay ? { relay } : {};
@@ -724,11 +734,11 @@ const buildStoredHostEntry = (entry) => {
   const apiUrl = directUrl ? (sanitizeHostUrlForStorage(entry?.apiUrl) || directUrl) : null;
 
   if (directUrl) {
-    return { id, label: labelRaw || directUrl, url: directUrl, apiUrl, ...tokenField, ...headerFields, ...relayField };
+    return { id, label: labelRaw || directUrl, url: directUrl, apiUrl, ...tokenField, ...headerFields, ...relayField, ...logoField };
   }
   if (relay) {
     const url = `relay://${relay.serverId}`;
-    return { id, label: labelRaw || url, url, ...tokenField, ...headerFields, relay };
+    return { id, label: labelRaw || url, url, ...tokenField, ...headerFields, relay, ...logoField };
   }
   return null;
 };
@@ -2907,7 +2917,7 @@ const compareSemver = (left, right) => {
 };
 
 const setupAutoUpdater = () => {
-  if (!app.isPackaged) {
+  if (!app.isPackaged || !updatesEnabled) {
     return;
   }
   autoUpdater.autoDownload = false;
@@ -4271,6 +4281,8 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       return {
         ...readDesktopHostsConfig(),
         localOrigin: state.localOrigin || state.sidecarUrl || null,
+        // With no local server there is no Local instance to offer.
+        localAvailable: Boolean(state.sidecarUrl),
       };
 
     case 'desktop_hosts_set': {
@@ -4363,6 +4375,9 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
     }
 
     case 'desktop_check_for_updates': {
+      if (!updatesEnabled) {
+        return { available: false, currentVersion: APP_VERSION, version: null, body: null, date: null };
+      }
       assertUpdaterCapability({ packaged: app.isPackaged });
       const currentVersion = APP_VERSION;
       const { available, updateInfo, updateResult, nextVersion, pendingUpdate } = await checkForDesktopUpdate({
@@ -4387,6 +4402,9 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
     }
 
     case 'desktop_download_and_install_update':
+      if (!updatesEnabled) {
+        throw new Error('In-app updates are disabled for this build.');
+      }
       assertUpdaterCapability({ packaged: app.isPackaged });
       if (!state.pendingUpdate) {
         throw new Error('No pending update');
@@ -5387,6 +5405,13 @@ app.whenReady().then(async () => {
   registerPackagedUiProtocol();
   hardenBrowserPanelSession();
   setupAutoUpdater();
+  // A branded app starts on its own instance; only a fresh settings file is
+  // seeded, so later changes in the host switcher survive restarts.
+  if (activeBrandProfile && seedBrandDefaultHost(structuredClone(readSettingsRoot()), activeBrandProfile)) {
+    await mutateSettingsRoot((root) => {
+      seedBrandDefaultHost(root, activeBrandProfile);
+    });
+  }
 
   if (process.platform === 'darwin') {
     Menu.setApplicationMenu(buildMacMenu());

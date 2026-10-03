@@ -6,6 +6,9 @@ module.exports = (context) => {
     ? path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, 'Contents', 'Resources')
     : path.join(context.appOutDir, 'resources');
   if (context.electronPlatformName !== 'darwin') return;
+  // Branded builds ship their own .icns; the upstream asset catalog would show
+  // the OpenChamber icon instead.
+  if (fs.existsSync(path.join(resourcesPath, 'brand-profile.json'))) return;
 
   const sourceAssetsPath = path.join(__dirname, '..', 'resources', 'icons', 'Assets.car');
 

@@ -25,15 +25,25 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createShellEnvironmentLoader } from './shell-environment.mjs';
+import { readActiveBrandProfile } from './brand-profile.mjs';
 import { clearAppImageArgv0FromProcessEnv } from '@openchamber/web/server/lib/inherited-env.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const isDev = process.env.OPENCHAMBER_ELECTRON_DEV === '1' || !app.isPackaged;
 
+// Branded builds (see brand-profile.mjs) carry their profile in the app
+// resources; null means the upstream OpenChamber identity. Read once here so
+// the entry and main bundles share the same value.
+export const activeBrandProfile = readActiveBrandProfile({
+  packaged: app.isPackaged,
+  resourcesPath: process.resourcesPath,
+  profilesDir: path.join(app.getAppPath(), '..', '..', 'branding', 'profiles'),
+});
+
 export const DEEP_LINK_PROTOCOL = 'openchamber';
 export const UI_PROTOCOL = 'openchamber-ui';
-const PACKAGED_APP_USER_MODEL_ID = 'dev.openchamber.desktop';
-const DEV_APP_USER_MODEL_ID = 'dev.openchamber.desktop.dev';
+const PACKAGED_APP_USER_MODEL_ID = activeBrandProfile?.bundleId || 'dev.openchamber.desktop';
+const DEV_APP_USER_MODEL_ID = `${PACKAGED_APP_USER_MODEL_ID}.dev`;
 export const APP_USER_MODEL_ID = app.isPackaged ? PACKAGED_APP_USER_MODEL_ID : DEV_APP_USER_MODEL_ID;
 export const BACKGROUND_START_ARG = '--background';
 
