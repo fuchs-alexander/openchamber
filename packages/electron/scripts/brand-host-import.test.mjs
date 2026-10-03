@@ -47,28 +47,85 @@ test('copies only the connection fields of the matching host under the profile i
     desktopDefaultHostId: 'claudi',
     desktopInitialHostChoiceCompleted: true,
   });
-  assert.deepEqual(result.summary, { matchedHostLabel: 'Claudi', tokenCopied: true, replacedExisting: false });
+  assert.deepEqual(result.summary, { matchedHostLabel: 'Claudi', token: 'copied', replacedExisting: false });
 });
 
-test('replaces only the profile host and keeps the rest of an existing target', () => {
-  const targetRoot = {
-    desktopHosts: [
-      { id: 'claudi', label: 'My Claudi', url: 'https://openchamber.c.nomobo.de/', clientToken: 'old' },
-      { id: 'extra', label: 'Extra', url: 'https://extra.example/' },
-    ],
-    desktopDefaultHostId: 'extra',
-    desktopInitialHostChoiceCompleted: true,
-    themeId: 'dark',
-  };
+const existingTarget = () => ({
+  desktopHosts: [
+    {
+      id: 'claudi',
+      label: 'My Claudi',
+      url: 'https://old.example/',
+      clientToken: 'fresh-login-token',
+      requestHeaders: { 'X-Own': 'kept' },
+      relay: { relayUrl: 'wss://relay.example', serverId: 's1', hostEncPubJwk: { kty: 'EC' } },
+    },
+    { id: 'extra', label: 'Extra', url: 'https://extra.example/' },
+  ],
+  desktopDefaultHostId: 'extra',
+  desktopInitialHostChoiceCompleted: true,
+  themeId: 'dark',
+});
+
+test('updates only the profile host and keeps the rest of an existing target', () => {
+  const targetRoot = existingTarget();
   const result = importBrandHost({ targetRoot, sourceRoot: source(), profile });
   assert.equal(result.root.desktopHosts.length, 2);
-  assert.equal(result.root.desktopHosts[0].clientToken, 'claudi-token');
-  assert.equal(result.root.desktopHosts[0].label, 'My Claudi');
-  assert.deepEqual(result.root.desktopHosts[1], { id: 'extra', label: 'Extra', url: 'https://extra.example/' });
+  const [claudi, extra] = result.root.desktopHosts;
+  assert.equal(claudi.label, 'My Claudi');
+  assert.equal(claudi.url, 'https://openchamber.c.nomobo.de/');
+  assert.equal(claudi.apiUrl, 'https://openchamber.c.nomobo.de/');
+  assert.equal(claudi.brandLogoId, 'nomobo');
+  assert.deepEqual(extra, { id: 'extra', label: 'Extra', url: 'https://extra.example/' });
   assert.equal(result.root.desktopDefaultHostId, 'extra');
   assert.equal(result.root.themeId, 'dark');
   assert.equal(result.summary.replacedExisting, true);
-  assert.equal(targetRoot.desktopHosts[0].clientToken, 'old', 'input is not mutated');
+  assert.equal(targetRoot.desktopHosts[0].url, 'https://old.example/', 'input is not mutated');
+});
+
+test('keeps an existing token instead of overwriting it with the source token', () => {
+  const result = importBrandHost({ targetRoot: existingTarget(), sourceRoot: source(), profile });
+  assert.equal(result.root.desktopHosts[0].clientToken, 'fresh-login-token');
+  assert.equal(result.summary.token, 'kept-existing');
+});
+
+test('never removes an existing token when the source has none', () => {
+  const sourceRoot = source();
+  delete sourceRoot.desktopHosts[1].clientToken;
+  const result = importBrandHost({ targetRoot: existingTarget(), sourceRoot, profile });
+  assert.equal(result.root.desktopHosts[0].clientToken, 'fresh-login-token');
+  assert.equal(result.summary.token, 'kept-existing');
+});
+
+test('replaces an existing token only when asked to', () => {
+  const result = importBrandHost({ targetRoot: existingTarget(), sourceRoot: source(), profile, replaceToken: true });
+  assert.equal(result.root.desktopHosts[0].clientToken, 'claudi-token');
+  assert.equal(result.summary.token, 'replaced');
+});
+
+test('keeps request headers and relay settings of the existing entry', () => {
+  const result = importBrandHost({ targetRoot: existingTarget(), sourceRoot: source(), profile });
+  const [claudi] = result.root.desktopHosts;
+  assert.deepEqual(claudi.requestHeaders, { 'X-Own': 'kept' });
+  assert.equal(claudi.relay.serverId, 's1');
+});
+
+test('fills in a missing token and headers on an existing entry', () => {
+  const targetRoot = existingTarget();
+  delete targetRoot.desktopHosts[0].clientToken;
+  delete targetRoot.desktopHosts[0].requestHeaders;
+  const result = importBrandHost({ targetRoot, sourceRoot: source(), profile });
+  assert.equal(result.root.desktopHosts[0].clientToken, 'claudi-token');
+  assert.deepEqual(result.root.desktopHosts[0].requestHeaders, { 'CF-Access-Client-Id': 'abc' });
+  assert.equal(result.summary.token, 'copied');
+});
+
+test('reports when neither side has a token', () => {
+  const sourceRoot = source();
+  delete sourceRoot.desktopHosts[1].clientToken;
+  const result = importBrandHost({ targetRoot: {}, sourceRoot, profile });
+  assert.equal('clientToken' in result.root.desktopHosts[0], false);
+  assert.equal(result.summary.token, 'none');
 });
 
 test('fails clearly when the source has no host for the profile URL', () => {

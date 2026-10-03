@@ -3,10 +3,11 @@
  * Copies the existing connection for a brand profile's instance from the
  * OpenChamber settings into the branded app's own settings file.
  *
- *   node packages/electron/scripts/import-brand-host.mjs <profileId> [--from <settings.json>] [--to <settings.json>]
+ *   node packages/electron/scripts/import-brand-host.mjs <profileId> [--from <settings.json>] [--to <settings.json>] [--replace-token]
  *
  * The source file is only read. An existing target is backed up next to itself
- * first. Quit the branded app before running this; it rewrites its settings.
+ * first. A token the branded app already has is kept unless --replace-token is
+ * given. Quit the branded app before running this; it rewrites its settings.
  * Tokens are never printed.
  */
 
@@ -21,11 +22,11 @@ import { importBrandHost } from './brand-host-import.mjs';
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
-  options: { from: { type: 'string' }, to: { type: 'string' } },
+  options: { from: { type: 'string' }, to: { type: 'string' }, 'replace-token': { type: 'boolean' } },
 });
 const [profileId] = positionals;
 if (!profileId) {
-  console.error('usage: import-brand-host.mjs <profileId> [--from <settings.json>] [--to <settings.json>]');
+  console.error('usage: import-brand-host.mjs <profileId> [--from <settings.json>] [--to <settings.json>] [--replace-token]');
   process.exit(2);
 }
 
@@ -53,7 +54,7 @@ const readJson = (filePath, { optional }) => {
 
 const sourceRoot = readJson(fromPath, { optional: false });
 const targetRoot = readJson(toPath, { optional: true });
-const { root, summary } = importBrandHost({ targetRoot, sourceRoot, profile });
+const { root, summary } = importBrandHost({ targetRoot, sourceRoot, profile, replaceToken: values['replace-token'] === true });
 
 fs.mkdirSync(path.dirname(toPath), { recursive: true, mode: 0o700 });
 fs.chmodSync(path.dirname(toPath), 0o700);
@@ -69,4 +70,10 @@ fs.renameSync(tmpPath, toPath);
 fs.chmodSync(toPath, 0o600);
 
 console.log(`Imported "${summary.matchedHostLabel || profile.defaultHost.label}" as "${profile.defaultHost.id}" into ${toPath}`);
-console.log(`Token copied: ${summary.tokenCopied ? 'yes' : 'no'}; replaced existing entry: ${summary.replacedExisting ? 'yes' : 'no'}`);
+const tokenMessages = {
+  copied: 'copied from the source',
+  replaced: 'replaced with the source token (--replace-token)',
+  'kept-existing': 'kept the existing one (use --replace-token to overwrite it)',
+  none: 'none in source or target; sign in once in the app',
+};
+console.log(`Token: ${tokenMessages[summary.token]}; existing entry updated: ${summary.replacedExisting ? 'yes' : 'no'}`);

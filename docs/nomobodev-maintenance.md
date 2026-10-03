@@ -78,7 +78,7 @@ Damit das Icon dauerhaft im Dock bleibt: Rechtsklick auf das laufende Icon, "Opt
 
 ## Zugang übernehmen
 
-Das Skript kopiert für ein Profil genau einen Eintrag aus den OpenChamber-Einstellungen: URL, Token und Request-Header des Servers mit der Profil-URL. Sonst nichts. Die Quelldatei wird nur gelesen. Eine vorhandene Zieldatei wird vorher daneben als `settings.json.backup-<Zeit>` gesichert. Ziel und Verzeichnis bekommen die Rechte `0600` und `0700`. Das Skript gibt den Token nie aus.
+Das Skript kopiert für ein Profil genau einen Eintrag aus den OpenChamber-Einstellungen: URL, Token und Request-Header des Servers mit der Profil-URL. Sonst nichts. Hat die App für diesen Server schon einen Eintrag, bleiben dessen Token, Header und übrige Einstellungen erhalten, denn ein dort gespeicherter Token kann aus einer neueren Anmeldung stammen. Den Token überschreibt nur `--replace-token`. Fehlt in der Quelle ein Token, wird keiner gelöscht. Die Ausgabe sagt jeweils, was mit dem Token passiert ist. Die Quelldatei wird nur gelesen. Eine vorhandene Zieldatei wird vorher daneben als `settings.json.backup-<Zeit>` gesichert. Ziel und Verzeichnis bekommen die Rechte `0600` und `0700`. Das Skript gibt den Token nie aus.
 
 ```sh
 # die App vorher beenden
@@ -91,7 +91,7 @@ node packages/electron/scripts/import-brand-host.mjs sofasx
 
 Akzeptiert der Server den übernommenen Token nicht mehr (z. B. NomoboHosting am 2026-10-03: auch in OpenChamber abgelaufen), fragt die App beim Start nach dem Passwort. Einmal anmelden und "Trust this device" anhaken.
 
-Optionen: `--from <settings.json>` (Standard `~/.config/openchamber/settings.json`), `--to <settings.json>` (Standard `~/.config/<displayName>/settings.json`).
+Optionen: `--from <settings.json>` (Standard `~/.config/openchamber/settings.json`), `--to <settings.json>` (Standard `~/.config/<displayName>/settings.json`), `--replace-token`.
 
 ## Upstream-Release übernehmen
 
