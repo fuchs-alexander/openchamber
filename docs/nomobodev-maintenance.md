@@ -12,6 +12,9 @@ Dieser Fork baut aus einem Codestand mehrere gebrandete macOS-Apps. Jede App ist
 |---|---|---|---|---|
 | `claudi` | `nomobodev` | `de.nomobo.nomobodev.claudi` | `https://openchamber.c.nomobo.de/` | nomobo / DEV auf `#07090E` |
 | `nomobogaming` | `nomobogaming` | `de.nomobo.nomobogaming` | `http://100.100.6.17:3000/` (Tailscale) | nomobo / GAMING auf `#1F1147` |
+| `nomobohosting` | `nomobohosting` | `de.nomobo.nomobohosting` | `https://oc.nomobo.de/` | nomobo / HOSTING auf `#142B49` |
+
+Menüleiste: jede App hat ihren Buchstaben in einer Kachel (D, G, H).
 
 ## Was ein Profil steuert
 
@@ -43,6 +46,8 @@ export PATH="$HOME/.bun/bin:$PATH"
 bun install
 OPENCHAMBER_BRAND_PROFILE=claudi bun run electron:build
 OPENCHAMBER_BRAND_PROFILE=nomobogaming bun run electron:build
+OPENCHAMBER_BRAND_PROFILE=nomobohosting bun run electron:build
+OPENCHAMBER_BRAND_PROFILE=nomobohosting bun run electron:build
 ```
 
 Ergebnis: `packages/electron/dist/brand-<profil>/mac-arm64/<App>.app`, z. B. `brand-claudi/mac-arm64/nomobodev.app`. Der Build ist ad-hoc signiert und nicht notarisiert. Lokal gebaute Apps tragen kein Quarantäne-Attribut, deshalb startet macOS sie trotzdem. `spctl -a` meldet `rejected`. Das ist erwartet. Eine App, die heruntergeladen oder per AirDrop weitergegeben wird, blockiert Gatekeeper. Für Weitergabe braucht es eine Developer-ID-Signatur und Notarisierung.
@@ -73,7 +78,10 @@ Das Skript kopiert für ein Profil genau einen Eintrag aus den OpenChamber-Einst
 # die App vorher beenden
 node packages/electron/scripts/import-brand-host.mjs claudi
 node packages/electron/scripts/import-brand-host.mjs nomobogaming
+node packages/electron/scripts/import-brand-host.mjs nomobohosting
 ```
+
+Akzeptiert der Server den übernommenen Token nicht mehr (z. B. NomoboHosting am 2026-10-03: auch in OpenChamber abgelaufen), fragt die App beim Start nach dem Passwort. Einmal anmelden und "Trust this device" anhaken.
 
 Optionen: `--from <settings.json>` (Standard `~/.config/openchamber/settings.json`), `--to <settings.json>` (Standard `~/.config/<displayName>/settings.json`).
 
@@ -111,19 +119,20 @@ Danach jede App wie oben installieren und kurz prüfen: verbindet sie sich, zeig
 ## Weiteres Profil anlegen
 
 1. `branding/profiles/<id>.json` nach dem Muster von `claudi.json` anlegen. Eigener `displayName`, eigene `bundleId`. Der Test `every checked-in profile is valid, credential-free and has its own identity` prüft das.
-2. Icon erzeugen: in `branding/scripts/build-brand-assets.sh` eine Zeile `build_icon <id> '<Hintergrund>' '<zweite Zeile>' "$tmp/unused-logo.png"` ergänzen und das Skript laufen lassen. Für die Menüleiste `"trayIconsDir": "branding/assets/tray-nomobo"` setzen.
+2. Icons erzeugen: in `branding/scripts/build-brand-assets.sh` eine Zeile `build_icon <id> '<Hintergrund>' '<zweite Zeile>' '<Buchstabe>' "$tmp/unused-logo.png"` ergänzen und das Skript laufen lassen. Im Profil `"trayIconsDir": "branding/assets/<id>/tray"` setzen. Buchstabe und Farbe dürfen sich mit keiner anderen App überschneiden.
 3. Logo für die Server-Auswahl als PNG unter `packages/ui/src/assets/brand-logos/<logoId>.png` ablegen und im Profil als `defaultHost.brandLogoId` eintragen.
 4. Tests laufen lassen, bauen, Zugang mit `import-brand-host.mjs <id>` übernehmen.
 
 ## Logo-Herkunft
 
-`branding/assets/nomobo-wordmark.png` ist das Header-Logo von nomobo.de, unverändert heruntergeladen von `https://nomobo.de/media/img_6a4f79ac9cabe8.65603421_1783593388.png` (318×61, SHA-256 `258a56e7d0cc41f34c4c062adcd8c934e43fed1b01abff8f4f68ea3756d54d41`). Die Hintergrundfarbe `#07090E` stammt aus `--header-bg-rgb` im CSS von nomobo.de. `branding/scripts/build-brand-assets.sh` erzeugt daraus `branding/assets/claudi/icon.icns` und `packages/ui/src/assets/brand-logos/nomobo.png`. Die Wortmarke wird nur skaliert und platziert, nicht nachgezeichnet. Das App-Icon trägt unter der Wortmarke die zweite Zeile "DEV", damit es sich von anderen nomobo-Apps unterscheidet. Gesetzt ist sie in Poppins SemiBold, der Schrift von nomobo.de (`branding/assets/fonts/`, SIL Open Font License, Quelle `github.com/google/fonts/ofl/poppins`), in `#F5F2EF` (`--header-text-color` von nomobo.de). NomoboGaming hat "GAMING" auf `#1F1147`. Ist eine zweite Zeile breiter als die Wortmarke, wird sie verkleinert. Das Logo in der Server-Auswahl bleibt die reine Wortmarke auf `#07090E`.
+`branding/assets/nomobo-wordmark.png` ist das Header-Logo von nomobo.de, unverändert heruntergeladen von `https://nomobo.de/media/img_6a4f79ac9cabe8.65603421_1783593388.png` (318×61, SHA-256 `258a56e7d0cc41f34c4c062adcd8c934e43fed1b01abff8f4f68ea3756d54d41`). Die Hintergrundfarbe `#07090E` stammt aus `--header-bg-rgb` im CSS von nomobo.de. `branding/scripts/build-brand-assets.sh` erzeugt daraus `branding/assets/claudi/icon.icns` und `packages/ui/src/assets/brand-logos/nomobo.png`. Die Wortmarke wird nur skaliert und platziert, nicht nachgezeichnet. Das App-Icon trägt unter der Wortmarke die zweite Zeile "DEV", damit es sich von anderen nomobo-Apps unterscheidet. Gesetzt ist sie in Poppins SemiBold, der Schrift von nomobo.de (`branding/assets/fonts/`, SIL Open Font License, Quelle `github.com/google/fonts/ofl/poppins`), in `#F5F2EF` (`--header-text-color` von nomobo.de). NomoboGaming hat "GAMING" auf `#1F1147`, NomoboHosting "HOSTING" auf `#142B49`, dem Navy des Hosting-Ordnericons aus `nomobo-hosting/assets/folder-icon.svg`. Ist eine zweite Zeile breiter als die Wortmarke, wird sie verkleinert. Das Logo in der Server-Auswahl bleibt die reine Wortmarke auf `#07090E`.
 
-Die Menüleisten-Icons (`branding/assets/tray-nomobo/`) nutzen das "nb"-Zeichen von nomobo.de (`branding/assets/nomobo-mark.png`, Favicon, 96×96, von `https://nomobo.de/media/img_6a7c47d5ca02a7.85878698_1786529749.png`, SHA-256 `7f4cb487805eb89cfb5e8d6665dd2bfb43c7fe0c11bec020fb169cc417a107c3`). `render-tray-icons.swift` übernimmt die Buchstaben als Maske in eine Umriss-Kachel. Die Füllstufen für Ruhe, Ungelesen und Beschäftigt-Animation stammen aus den Upstream-Icons. Alle nomobo-Apps haben dasselbe Menüleisten-Icon; welche App gemeint ist, zeigt der Tooltip. Auf App-Icon-Größe hochskaliert wirkt sie leicht weich. Eine Vektor- oder hochaufgelöste Fassung würde das beheben.
+Die Menüleisten-Icons (`branding/assets/<id>/tray/`) zeigen je einen Buchstaben in Poppins SemiBold in einer Umriss-Kachel, erzeugt von `render-tray-icons.swift`. Die Füllstufen für Ruhe, Ungelesen und Beschäftigt-Animation stammen aus den Upstream-Icons.
 
 ## Bekannte Grenzen
 
 - Kein Auto-Update. Updates laufen manuell wie oben beschrieben.
 - Ad-hoc-Signatur, keine Notarisierung (siehe "App bauen").
 - Einige feste Texte nennen noch "OpenChamber": Fenstertitel (z. B. "motolio | Claudi | OpenChamber"), "About OpenChamber" im App-Menü, Tray-Menü. Funktional hat das keine Folgen.
-- Die Meldung "Remote instance update" in der Server-Auswahl bezieht sich auf die Server-Version auf Claudi, nicht auf die App.
+- Die Meldung "Remote instance update" in der Server-Auswahl bezieht sich auf die Server-Version, nicht auf die App.
+- Der Anmeldebildschirm zeigt den Upstream-Hinweis "Use Local if remote is unreachable", obwohl die Apps kein Local haben.

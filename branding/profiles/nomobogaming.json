@@ -3,7 +3,7 @@
   "displayName": "nomobogaming",
   "bundleId": "de.nomobo.nomobogaming",
   "iconPath": "branding/assets/nomobogaming/icon.icns",
-  "trayIconsDir": "branding/assets/tray-nomobo",
+  "trayIconsDir": "branding/assets/nomobogaming/tray",
   "updatesEnabled": false,
   "localServer": false,
   "registerDeepLinkProtocol": false,

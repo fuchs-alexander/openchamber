@@ -1,0 +1,16 @@
+{
+  "profileId": "nomobohosting",
+  "displayName": "nomobohosting",
+  "bundleId": "de.nomobo.nomobohosting",
+  "iconPath": "branding/assets/nomobohosting/icon.icns",
+  "trayIconsDir": "branding/assets/nomobohosting/tray",
+  "updatesEnabled": false,
+  "localServer": false,
+  "registerDeepLinkProtocol": false,
+  "defaultHost": {
+    "id": "nomobohosting",
+    "label": "NomoboHosting",
+    "url": "https://oc.nomobo.de/",
+    "brandLogoId": "nomobo"
+  }
+}

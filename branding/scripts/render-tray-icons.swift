@@ -1,12 +1,13 @@
-// Renders macOS menu bar template icons from the nomobo.de "nb" mark.
-// The letter shapes are taken from the source image as a mask (not redrawn);
-// they sit in an outlined tile whose fill follows the upstream OpenChamber
-// tray states: idle (empty), unseen (filled) and a 16-frame busy animation.
+// Renders macOS menu bar template icons for one app: a single letter in an
+// outlined tile whose fill follows the upstream OpenChamber tray states: idle
+// (empty), unseen (filled) and a 16-frame busy animation. Each nomobo app gets
+// its own letter so they can be told apart in the menu bar.
 //
-// Usage: swift branding/scripts/render-tray-icons.swift <mark.png> <out-dir>
+// Usage: swift branding/scripts/render-tray-icons.swift <letter> <font.ttf> <out-dir>
 
 import AppKit
 import CoreGraphics
+import CoreText
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
@@ -17,34 +18,10 @@ func fail(_ message: String) -> Never {
 }
 
 let args = CommandLine.arguments
-guard args.count == 3 else { fail("usage: render-tray-icons.swift <mark.png> <out-dir>") }
+guard args.count == 4 else { fail("usage: render-tray-icons.swift <letter> <font.ttf> <out-dir>") }
 
-guard let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: args[1]) as CFURL, nil),
-      let mark = CGImageSourceCreateImageAtIndex(source, 0, nil) else { fail("cannot read \(args[1])") }
-
-// Letter mask: the bright (white "n", orange "b") pixels of the mark become
-// opaque black, the dark tile and transparent corners become transparent.
-func letterMask(_ image: CGImage) -> CGImage {
-  let width = image.width, height = image.height
-  var pixels = [UInt8](repeating: 0, count: width * height * 4)
-  let space = CGColorSpace(name: CGColorSpace.sRGB)!
-  let info = CGImageAlphaInfo.premultipliedLast.rawValue
-  guard let reader = CGContext(data: &pixels, width: width, height: height, bitsPerComponent: 8,
-                               bytesPerRow: width * 4, space: space, bitmapInfo: info) else { fail("mask context") }
-  reader.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-  var out = [UInt8](repeating: 0, count: width * height * 4)
-  for index in 0..<(width * height) {
-    let r = Double(pixels[index * 4]), g = Double(pixels[index * 4 + 1]), b = Double(pixels[index * 4 + 2])
-    let alpha = Double(pixels[index * 4 + 3]) / 255
-    let brightness = max(r, g, b) / 255
-    let coverage = min(1, max(0, (brightness - 0.12) / 0.6)) * alpha
-    out[index * 4 + 3] = UInt8((coverage * 255).rounded())
-  }
-  guard let writer = CGContext(data: &out, width: width, height: height, bitsPerComponent: 8,
-                               bytesPerRow: width * 4, space: space, bitmapInfo: info),
-        let result = writer.makeImage() else { fail("mask image") }
-  return result
-}
+guard let descriptors = CTFontManagerCreateFontDescriptorsFromURL(URL(fileURLWithPath: args[2]) as CFURL) as? [CTFontDescriptor],
+      let fontDescriptor = descriptors.first else { fail("cannot load font at \(args[2])") }
 
 func writePNG(_ image: CGImage, to path: String) {
   guard let destination = CGImageDestinationCreateWithURL(
@@ -53,8 +30,6 @@ func writePNG(_ image: CGImage, to path: String) {
   CGImageDestinationAddImage(destination, image, nil)
   guard CGImageDestinationFinalize(destination) else { fail("cannot finalize \(path)") }
 }
-
-let letters = letterMask(mark)
 
 func renderTray(size: Int, fillAlpha: CGFloat) -> CGImage {
   let scale = CGFloat(size) / 18
@@ -73,8 +48,15 @@ func renderTray(size: Int, fillAlpha: CGFloat) -> CGImage {
   context.setStrokeColor(CGColor(gray: 0, alpha: 1))
   context.setLineWidth(lineWidth)
   context.strokePath()
-  // The mark's own proportions: letters keep their place within the tile.
-  context.draw(letters, in: tile.insetBy(dx: -0.5 * scale, dy: -0.5 * scale))
+  let font = CTFontCreateWithFontDescriptor(fontDescriptor, 11.5 * scale, nil)
+  let attributes: [NSAttributedString.Key: Any] = [
+    NSAttributedString.Key(kCTFontAttributeName as String): font,
+    NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(gray: 0, alpha: 1),
+  ]
+  let line = CTLineCreateWithAttributedString(NSAttributedString(string: args[1], attributes: attributes))
+  let bounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+  context.textPosition = CGPoint(x: tile.midX - bounds.width / 2 - bounds.minX, y: tile.midY - bounds.height / 2 - bounds.minY)
+  CTLineDraw(line, context)
   guard let image = context.makeImage() else { fail("tray image") }
   return image
 }
@@ -87,7 +69,7 @@ for (index, alpha) in breath.enumerated() {
   frames.append((String(format: "trayTemplate-breath-%02d", index), alpha))
 }
 
-let outDir = args[2]
+let outDir = args[3]
 try? FileManager.default.createDirectory(atPath: outDir, withIntermediateDirectories: true)
 for (name, alpha) in frames {
   writePNG(renderTray(size: 18, fillAlpha: alpha), to: "\(outDir)/\(name).png")
