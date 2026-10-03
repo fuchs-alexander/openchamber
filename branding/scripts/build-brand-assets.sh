@@ -47,9 +47,10 @@ nomobo_icon nomobogaming '#1F1147' 'GAMING' 'G'
 # Navy of the nomobo-hosting folder icon (nomobo-hosting/assets/folder-icon.svg).
 nomobo_icon nomobohosting '#142B49' 'HOSTING' 'H'
 
-# Posylka: the posylka.de wordmark (SVG) on white; the only Posylka app, so no second line.
+# Posylka: the posylka.de wordmark (SVG) in its original colours on near-black;
+# the only Posylka app, so no second line.
 mkdir -p "$assets/posylka"
-swift "$render" icon "$assets/posylka-logo.svg" '#FFFFFF' "$assets/posylka/icon-1024.png"
+swift "$render" icon "$assets/posylka-logo.svg" '#0B0F14' "$assets/posylka/icon-1024.png"
 finish_profile posylka 'P'
 
 # Sofasx: the mebleokes.com OKES logo already is a tile and becomes the icon.
