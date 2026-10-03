@@ -3,10 +3,15 @@
 // placed on the brand's background colour.
 //
 // Usage:
-//   swift branding/scripts/render-brand-assets.swift <wordmark.png> <hex-bg> <icon-1024.png> <logo.png>
+//   swift branding/scripts/render-brand-assets.swift <wordmark.png> <hex-bg> <icon-1024.png> <logo.png> \
+//     [<icon-label> <font.ttf> <hex-label-colour>]
+//
+// The optional label is set as a second line under the wordmark on the app
+// icon only, so apps built from the same wordmark stay distinguishable.
 
 import AppKit
 import CoreGraphics
+import CoreText
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
@@ -17,8 +22,8 @@ func fail(_ message: String) -> Never {
 }
 
 let args = CommandLine.arguments
-guard args.count == 5 else {
-  fail("usage: render-brand-assets.swift <wordmark.png> <hex-bg> <icon-1024.png> <logo.png>")
+guard args.count == 5 || args.count == 8 else {
+  fail("usage: render-brand-assets.swift <wordmark.png> <hex-bg> <icon-1024.png> <logo.png> [<icon-label> <font.ttf> <hex-label-colour>]")
 }
 
 func loadImage(_ path: String) -> CGImage {
@@ -67,8 +72,21 @@ func drawWordmark(_ wordmark: CGImage, in context: CGContext, centeredIn rect: C
   context.draw(wordmark, in: CGRect(origin: origin, size: size))
 }
 
+func makeLabelLine(_ text: String, fontPath: String, size: CGFloat, colour: CGColor, tracking: CGFloat) -> CTLine {
+  guard let descriptors = CTFontManagerCreateFontDescriptorsFromURL(URL(fileURLWithPath: fontPath) as CFURL) as? [CTFontDescriptor],
+        let descriptor = descriptors.first else { fail("cannot load font at \(fontPath)") }
+  let font = CTFontCreateWithFontDescriptor(descriptor, size, nil)
+  let attributes: [NSAttributedString.Key: Any] = [
+    NSAttributedString.Key(kCTFontAttributeName as String): font,
+    NSAttributedString.Key(kCTForegroundColorAttributeName as String): colour,
+    NSAttributedString.Key(kCTKernAttributeName as String): tracking,
+  ]
+  return CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
+}
+
 let wordmark = loadImage(args[1])
 let background = parseHex(args[2])
+let label = args.count == 8 ? args[5] : nil
 
 // macOS app icon grid: 824pt rounded square centred on a 1024pt canvas.
 let icon = render(width: 1024, height: 1024) { context in
@@ -76,7 +94,23 @@ let icon = render(width: 1024, height: 1024) { context in
   context.addPath(CGPath(roundedRect: tile, cornerWidth: 185, cornerHeight: 185, transform: nil))
   context.setFillColor(background)
   context.fillPath()
-  drawWordmark(wordmark, in: context, centeredIn: tile, width: 640)
+  guard let label else {
+    drawWordmark(wordmark, in: context, centeredIn: tile, width: 640)
+    return
+  }
+  // Two lines: wordmark, then the label, centred as one block.
+  let wordmarkWidth: CGFloat = 600
+  let wordmarkHeight = CGFloat(wordmark.height) * wordmarkWidth / CGFloat(wordmark.width)
+  let line = makeLabelLine(label, fontPath: args[6], size: 170, colour: parseHex(args[7]), tracking: 14)
+  let bounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+  let gap: CGFloat = 70
+  let blockHeight = wordmarkHeight + gap + bounds.height
+  let blockBottom = tile.midY - blockHeight / 2
+  let labelX = tile.midX - bounds.width / 2 - bounds.minX
+  context.textPosition = CGPoint(x: labelX, y: blockBottom - bounds.minY)
+  CTLineDraw(line, context)
+  let wordmarkRect = CGRect(x: tile.midX - wordmarkWidth / 2, y: blockBottom + bounds.height + gap, width: wordmarkWidth, height: wordmarkHeight)
+  context.draw(wordmark, in: wordmarkRect)
 }
 writePNG(icon, to: args[3])
 

@@ -171,6 +171,10 @@ Build output goes to `packages/electron/dist`.
 
 macOS builds produce `dmg` and `zip` artifacts. Windows builds produce an NSIS installer. Linux builds produce an AppImage for the native x64 or arm64 host.
 
+### Branded builds
+
+`OPENCHAMBER_BRAND_PROFILE=<id> bun run electron:build` packages a branded app from `branding/profiles/<id>.json` (validated by `brand-profile.mjs`; builder config derived in `scripts/brand-builder-config.mjs`). The profile is staged as `Contents/Resources/brand-profile.json`; `early-startup.mjs` reads it into `activeBrandProfile`, and `entry.mjs` then sets the app name, a separate `userData` directory (and with it the single-instance lock), `OPENCHAMBER_DATA_DIR`, and `OPENCHAMBER_SKIP_LOCAL_SERVER` when the profile has no local server. Profiles can also disable the updater and the `openchamber://` registration. Without a staged profile the app is unchanged upstream OpenChamber. In development, `OPENCHAMBER_BRAND_PROFILE` selects a checked-in profile and uses `<displayName> Dev` / `~/.config/<displayName>-dev`. `scripts/import-brand-host.mjs` copies one existing connection into a branded app's settings. Operator notes: `docs/nomobodev-maintenance.md`.
+
 ## Platform Notes
 
 macOS packaging needs Xcode/build tools for notarized builds and icon asset compilation.

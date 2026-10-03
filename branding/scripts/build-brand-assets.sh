@@ -1,6 +1,7 @@
 #!/bin/sh
-# Regenerates the Claudi icon (.icns + 1024 PNG) and the "nomobo" host-switcher
-# logo from the unmodified nomobo.de wordmark. macOS only (swift, sips, iconutil).
+# Regenerates the Claudi icon (.icns + 1024 PNG, wordmark with "DEV" as second
+# line) and the "nomobo" host-switcher logo from the unmodified nomobo.de
+# wordmark. macOS only (swift, sips, iconutil).
 set -eu
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
@@ -8,12 +9,16 @@ wordmark="$root/branding/assets/nomobo-wordmark.png"
 background='#07090E'
 out="$root/branding/assets/claudi"
 logo="$root/packages/ui/src/assets/brand-logos/nomobo.png"
+label='DEV'
+font="$root/branding/assets/fonts/Poppins-SemiBold.ttf"
+label_colour='#F5F2EF'
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 mkdir -p "$out"
-swift "$root/branding/scripts/render-brand-assets.swift" "$wordmark" "$background" "$out/icon-1024.png" "$logo"
+swift "$root/branding/scripts/render-brand-assets.swift" "$wordmark" "$background" "$out/icon-1024.png" "$logo" \
+  "$label" "$font" "$label_colour"
 
 iconset="$tmp/icon.iconset"
 mkdir "$iconset"
