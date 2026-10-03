@@ -13,7 +13,7 @@ Dieser Fork baut aus einem Codestand mehrere gebrandete macOS-Apps. Jede App ist
 | `claudi` | `nomobodev` | `de.nomobo.nomobodev.claudi` | `https://openchamber.c.nomobo.de/` | nomobo / DEV auf `#07090E` |
 | `nomobogaming` | `nomobogaming` | `de.nomobo.nomobogaming` | `http://100.100.6.17:3000/` (Tailscale) | nomobo / GAMING auf `#1F1147` |
 | `nomobohosting` | `nomobohosting` | `de.nomobo.nomobohosting` | `https://oc.nomobo.de/` | nomobo / HOSTING auf `#142B49` |
-| `posylka` | `posylka` | `de.nomobo.posylka` | `https://openchamber.colibo.io/` | Posylka.de-Logo auf Fast-Schwarz `#0B0F14` |
+| `posylka` | `posylka` | `de.nomobo.posylka` | `https://openchamber.colibo.io/` | weißes „P“ wie im Favicon von posylka.de |
 | `sofasx` | `sofasx` | `de.nomobo.sofasx` | `https://af.oc.nomobo.de/` | OKES-Logo von mebleokes.com |
 
 Menüleiste: jede App hat ihren Buchstaben in einer Kachel (D, G, H, P, S). Ein Test stellt sicher, dass keine zwei Profile dasselbe Menüleisten-Icon haben und dass Icon, Menüleisten-Icons und Auswahl-Logo jedes Profils existieren.
@@ -137,7 +137,7 @@ Danach jede App wie oben installieren und kurz prüfen: verbindet sie sich, zeig
 
 Die Menüleisten-Icons (`branding/assets/<id>/tray/`) zeigen je einen Buchstaben in Poppins SemiBold in einer Umriss-Kachel, erzeugt von `render-tray-icons.swift`. Die Füllstufen für Ruhe, Ungelesen und Beschäftigt-Animation stammen aus den Upstream-Icons.
 
-Posylka: `branding/assets/posylka-logo.svg` ist das Vektor-Logo von `https://posylka.de/images/logo-2021.svg` (SHA-256 `29b81f8f7e5ba8aaf1a49413877f2aa8417ecd01f6d699ab977bec95979f2f8e`), in Originalfarben auf fast schwarzer Kachel (`#0B0F14`). In der Server-Auswahl steht es auf Weiß, damit das Blau im dunklen Design lesbar bleibt.
+Posylka: `branding/assets/posylka-logo.svg` ist das Vektor-Logo von `https://posylka.de/images/logo-2021.svg` (SHA-256 `29b81f8f7e5ba8aaf1a49413877f2aa8417ecd01f6d699ab977bec95979f2f8e`), die Quelle. Das Dock-Icon sieht aus wie das Favicon von posylka.de (weißes „P“ auf Orange-Verlauf). Die Website liefert das Favicon nur bis 192 px; deshalb setzt `render-brand-assets.swift icon-initial` das „P“ als Vektor-Buchstaben aus dem Logo auf den Verlauf, mit den aus `favicon-192x192.png` gemessenen Farben `#ED8420` → `#E56226`. In der Server-Auswahl steht das volle Logo auf Weiß.
 
 Sofasx: `branding/assets/okes-logo.webp` ist das Header-Logo von mebleokes.com (`https://mebleokes.com/media/img_699af1fec25197.22679346_1771762174.webp`, 189×189, SHA-256 `485ad05d5f2002ca8ef9ed207ec75688889ffd75a966866077e08902a290ad8b`). Eine größere Fassung liefert die Website nicht, deshalb ist das Dock-Icon etwas weich. Eine hochaufgelöste Datei kann die Quelle ersetzen; danach das Build-Skript laufen lassen und neu bauen.
 

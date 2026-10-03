@@ -7,6 +7,9 @@
 //       is a second line, so apps sharing a wordmark stay distinguishable.
 //   render-brand-assets.swift icon-logo <logo> <icon-1024.png>
 //       A square logo that already is a tile, placed on the macOS icon grid.
+//   render-brand-assets.swift icon-initial <wordmark> <hex-top> <hex-bottom> <icon-1024.png>
+//       The wordmark's first letter in white, centred on a vertical gradient,
+//       for brands whose favicon is that letter (crisp, unlike an upscaled favicon).
 //   render-brand-assets.swift logo <wordmark> <hex-bg> <logo.png> [<height>]
 //       Host-switcher logo: the wordmark on a rounded pill, optionally scaled to
 //       <height> pixels, so it stays legible on light and dark themes.
@@ -27,7 +30,7 @@ func fail(_ message: String) -> Never {
 
 let args = CommandLine.arguments
 func usage() -> Never {
-  fail("usage: render-brand-assets.swift icon <wordmark> <hex-bg> <out.png> [<label> <font.ttf> <hex-colour>] | icon-logo <logo> <out.png> | logo <wordmark> <hex-bg> <out.png> [<height>]")
+  fail("usage: render-brand-assets.swift icon <wordmark> <hex-bg> <out.png> [<label> <font.ttf> <hex-colour>] | icon-logo <logo> <out.png> | icon-initial <wordmark> <hex-top> <hex-bottom> <out.png> | logo <wordmark> <hex-bg> <out.png> [<height>]")
 }
 guard args.count >= 2 else { usage() }
 
@@ -146,6 +149,51 @@ func renderLogoPill(wordmark: CGImage, background: CGColor, height: Int?) -> CGI
   }
 }
 
+// The first glyph of a wordmark (columns up to the first gap), as a white mask.
+func firstGlyphInWhite(_ image: CGImage) -> CGImage {
+  let width = image.width, height = image.height
+  var pixels = [UInt8](repeating: 0, count: width * height * 4)
+  let space = CGColorSpace(name: CGColorSpace.sRGB)!
+  let info = CGImageAlphaInfo.premultipliedLast.rawValue
+  guard let reader = CGContext(data: &pixels, width: width, height: height, bitsPerComponent: 8,
+                               bytesPerRow: width * 4, space: space, bitmapInfo: info) else { fail("glyph context") }
+  reader.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+  let inked = (0..<width).map { x in (0..<height).contains { y in pixels[(y * width + x) * 4 + 3] > 20 } }
+  guard let start = inked.firstIndex(of: true) else { fail("wordmark is empty") }
+  let end = inked[start...].firstIndex(of: false) ?? width
+  let rows = (0..<height).filter { y in (start..<end).contains { x in pixels[(y * width + x) * 4 + 3] > 20 } }
+  guard let top = rows.first, let bottom = rows.last else { fail("wordmark is empty") }
+  let glyphWidth = end - start, glyphHeight = bottom - top + 1
+  var out = [UInt8](repeating: 0, count: glyphWidth * glyphHeight * 4)
+  for y in 0..<glyphHeight {
+    for x in 0..<glyphWidth {
+      let alpha = pixels[((y + top) * width + x + start) * 4 + 3]
+      let index = (y * glyphWidth + x) * 4
+      out[index] = alpha; out[index + 1] = alpha; out[index + 2] = alpha; out[index + 3] = alpha
+    }
+  }
+  guard let writer = CGContext(data: &out, width: glyphWidth, height: glyphHeight, bitsPerComponent: 8,
+                               bytesPerRow: glyphWidth * 4, space: space, bitmapInfo: info),
+        let glyph = writer.makeImage() else { fail("glyph image") }
+  return glyph
+}
+
+func renderInitialIcon(wordmark: CGImage, top: CGColor, bottom: CGColor) -> CGImage {
+  let glyph = firstGlyphInWhite(wordmark)
+  return render(width: 1024, height: 1024) { context in
+    context.saveGState()
+    context.addPath(CGPath(roundedRect: tile, cornerWidth: 185, cornerHeight: 185, transform: nil))
+    context.clip()
+    let gradient = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB)!, colors: [top, bottom] as CFArray, locations: [0, 1])!
+    context.drawLinearGradient(gradient, start: CGPoint(x: tile.midX, y: tile.maxY), end: CGPoint(x: tile.midX, y: tile.minY), options: [])
+    context.restoreGState()
+    // Letter height as in the posylka.de favicon: 118 of 192 px.
+    let height = tile.height * 118 / 192
+    let width = height * CGFloat(glyph.width) / CGFloat(glyph.height)
+    context.draw(glyph, in: CGRect(x: tile.midX - width / 2, y: tile.midY - height / 2, width: width, height: height))
+  }
+}
+
 switch args[1] {
 case "icon" where args.count == 5 || args.count == 8:
   let label = args.count == 8 ? (text: args[5], fontPath: args[6], colour: parseHex(args[7])) : nil
@@ -153,6 +201,8 @@ case "icon" where args.count == 5 || args.count == 8:
 case "icon-logo" where args.count == 4:
   let logo = loadImage(args[2])
   writePNG(render(width: 1024, height: 1024) { $0.draw(logo, in: tile) }, to: args[3])
+case "icon-initial" where args.count == 6:
+  writePNG(renderInitialIcon(wordmark: loadImage(args[2]), top: parseHex(args[3]), bottom: parseHex(args[4])), to: args[5])
 case "logo" where args.count == 5 || args.count == 6:
   let height = args.count == 6 ? Int(args[5]) : nil
   writePNG(renderLogoPill(wordmark: loadImage(args[2]), background: parseHex(args[3]), height: height), to: args[4])
