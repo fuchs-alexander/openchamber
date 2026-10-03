@@ -2,8 +2,10 @@
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { brandDevEnvironment } from '../brand-profile.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -215,6 +217,13 @@ async function stopChildTree(child) {
 }
 
 async function main() {
+  // A branded dev run keeps every dev process on the profile's own data
+  // directory, and a profile without a local server on bundled UI.
+  Object.assign(process.env, brandDevEnvironment({
+    env: process.env,
+    profilesDir: path.join(repoRoot, 'branding', 'profiles'),
+    homeDir: os.homedir(),
+  }));
   const useBundledUi = process.env.OPENCHAMBER_ELECTRON_USE_BUNDLED_UI === '1';
   let devServer = null;
   let hmrApiPort = '';

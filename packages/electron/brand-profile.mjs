@@ -129,6 +129,27 @@ export const brandRuntimePaths = (profile, { appDataDir, homeDir, development = 
 });
 
 /**
+ * Variables `electron:dev` adds to every dev process for a branded run. Only
+ * Electron reads the profile itself, so without them the HMR dev server would
+ * use the upstream `~/.config/openchamber` data (settings, message queues) of
+ * an installed OpenChamber. A profile without a local server also runs on
+ * bundled UI: the HMR dev server always starts a local OpenCode, and with a
+ * remote default the window would load the remote page without desktop IPC.
+ */
+export const brandDevEnvironment = ({ env, profilesDir, homeDir }) => {
+  const profile = readActiveBrandProfile({ packaged: false, profilesDir, env });
+  if (!profile) return {};
+  const extra = {};
+  if (!String(env.OPENCHAMBER_DATA_DIR || '').trim()) {
+    extra.OPENCHAMBER_DATA_DIR = brandRuntimePaths(profile, { appDataDir: '', homeDir, development: true }).dataDir;
+  }
+  if (!profile.localServer) {
+    extra.OPENCHAMBER_ELECTRON_USE_BUNDLED_UI = '1';
+  }
+  return extra;
+};
+
+/**
  * First-launch default: the profile's instance, already chosen. Settings that
  * have ever held a host list or a completed instance choice are the user's and
  * stay untouched.

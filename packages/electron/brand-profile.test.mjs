@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   BRAND_PROFILE_RESOURCE_NAME,
+  brandDevEnvironment,
   brandRuntimePaths,
   parseBrandProfile,
   readActiveBrandProfile,
@@ -162,6 +163,41 @@ test('development runs keep their state apart from the installed branded app', (
   const paths = brandRuntimePaths(profile, { appDataDir: '/A', homeDir: '/H', development: true });
   assert.equal(paths.userDataDir, '/A/nomobodev Dev');
   assert.equal(paths.dataDir, '/H/.config/nomobodev-dev');
+});
+
+test('a branded dev run points every dev process at the profile dev data directory', () => {
+  const extra = brandDevEnvironment({
+    env: { OPENCHAMBER_BRAND_PROFILE: 'claudi' },
+    profilesDir: repoProfilesDir,
+    homeDir: '/H',
+  });
+  assert.equal(extra.OPENCHAMBER_DATA_DIR, '/H/.config/nomobodev-dev');
+});
+
+test('a dev run of a profile without a local server uses bundled UI, so no dev server or local OpenCode starts', () => {
+  const extra = brandDevEnvironment({
+    env: { OPENCHAMBER_BRAND_PROFILE: 'claudi' },
+    profilesDir: repoProfilesDir,
+    homeDir: '/H',
+  });
+  assert.equal(extra.OPENCHAMBER_ELECTRON_USE_BUNDLED_UI, '1');
+});
+
+test('an unbranded dev run is left alone and an explicit data directory is kept', () => {
+  assert.deepEqual(brandDevEnvironment({ env: {}, profilesDir: repoProfilesDir, homeDir: '/H' }), {});
+  const extra = brandDevEnvironment({
+    env: { OPENCHAMBER_BRAND_PROFILE: 'claudi', OPENCHAMBER_DATA_DIR: '/custom' },
+    profilesDir: repoProfilesDir,
+    homeDir: '/H',
+  });
+  assert.equal('OPENCHAMBER_DATA_DIR' in extra, false);
+});
+
+test('a branded dev run with an unknown profile fails before anything starts', () => {
+  assert.throws(
+    () => brandDevEnvironment({ env: { OPENCHAMBER_BRAND_PROFILE: 'nope' }, profilesDir: repoProfilesDir, homeDir: '/H' }),
+    /Unknown brand profile "nope"/,
+  );
 });
 
 test('brand logo ids are short identifiers, never paths or URLs', () => {
