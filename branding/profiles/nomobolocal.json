@@ -1,0 +1,11 @@
+{
+  "profileId": "nomobolocal",
+  "displayName": "nomobolocal",
+  "bundleId": "de.nomobo.nomobolocal",
+  "iconPath": "branding/assets/nomobolocal/icon.icns",
+  "trayIconsDir": "branding/assets/nomobolocal/tray",
+  "updatesEnabled": false,
+  "localServer": true,
+  "shareUpstreamData": true,
+  "registerDeepLinkProtocol": false
+}

@@ -2,9 +2,12 @@
 // logos. Source artwork is never redrawn: it is only scaled and placed.
 //
 // Usage:
-//   render-brand-assets.swift icon <wordmark> <hex-bg> <icon-1024.png> [<label> <font.ttf> <hex-label-colour>]
-//       Wordmark centred on a tile in the background colour; the optional label
-//       is a second line, so apps sharing a wordmark stay distinguishable.
+//   render-brand-assets.swift icon <wordmark> <hex-bg> <icon-1024.png> [<label> <font.ttf> <hex-label-colour> [<hex-accent>]]
+//       Wordmark centred on a tile in the background colour (or a vertical
+//       gradient written as "#top:#bottom"); the optional label is a second
+//       line, so apps sharing a wordmark stay distinguishable. <hex-accent>
+//       recolours the wordmark's orange parts where they would vanish on an
+//       orange or red background.
 //   render-brand-assets.swift icon-logo <logo> <icon-1024.png>
 //       A square logo that already is a tile, placed on the macOS icon grid.
 //   render-brand-assets.swift icon-initial <wordmark> <hex-top> <hex-bottom> <icon-1024.png>
@@ -60,6 +63,42 @@ func parseHex(_ hex: String) -> CGColor {
   )
 }
 
+// A solid colour, or a vertical gradient written as "#top:#bottom".
+func fillBackground(_ spec: String, in context: CGContext, rect: CGRect) {
+  let stops = spec.split(separator: ":").map { parseHex(String($0)) }
+  guard stops.count == 2 else {
+    context.setFillColor(stops[0])
+    context.fill(rect)
+    return
+  }
+  let gradient = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB)!, colors: stops as CFArray, locations: [0, 1])!
+  context.drawLinearGradient(gradient, start: CGPoint(x: rect.midX, y: rect.maxY), end: CGPoint(x: rect.midX, y: rect.minY), options: [])
+}
+
+// Replaces the orange parts of a wordmark (red well above blue) with another
+// colour, keeping white parts and anti-aliased edges as they are.
+func recolourOrange(_ image: CGImage, to accent: CGColor) -> CGImage {
+  let width = image.width, height = image.height
+  var pixels = [UInt8](repeating: 0, count: width * height * 4)
+  let space = CGColorSpace(name: CGColorSpace.sRGB)!
+  let info = CGImageAlphaInfo.premultipliedLast.rawValue
+  guard let context = CGContext(data: &pixels, width: width, height: height, bitsPerComponent: 8,
+                                bytesPerRow: width * 4, space: space, bitmapInfo: info) else { fail("recolour context") }
+  context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+  let target = accent.converted(to: space, intent: .defaultIntent, options: nil)!.components!
+  for index in 0..<(width * height) {
+    let alpha = Double(pixels[index * 4 + 3])
+    guard alpha > 0 else { continue }
+    let red = Double(pixels[index * 4]) / alpha, blue = Double(pixels[index * 4 + 2]) / alpha
+    guard red - blue > 0.35 else { continue }
+    for channel in 0..<3 {
+      pixels[index * 4 + channel] = UInt8((Double(target[channel]) * alpha).rounded())
+    }
+  }
+  guard let result = context.makeImage() else { fail("recolour image") }
+  return result
+}
+
 func render(width: Int, height: Int, draw: (CGContext) -> Void) -> CGImage {
   guard let context = CGContext(
     data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
@@ -102,11 +141,13 @@ func makeLabelLine(_ text: String, fontPath: String, size: CGFloat, colour: CGCo
 // macOS app icon grid: 824pt rounded square centred on a 1024pt canvas.
 let tile = CGRect(x: 100, y: 100, width: 824, height: 824)
 
-func renderIcon(wordmark: CGImage, background: CGColor, label: (text: String, fontPath: String, colour: CGColor)?) -> CGImage {
+func renderIcon(wordmark: CGImage, background: String, label: (text: String, fontPath: String, colour: CGColor)?) -> CGImage {
   render(width: 1024, height: 1024) { context in
+    context.saveGState()
     context.addPath(CGPath(roundedRect: tile, cornerWidth: 185, cornerHeight: 185, transform: nil))
-    context.setFillColor(background)
-    context.fillPath()
+    context.clip()
+    fillBackground(background, in: context, rect: tile)
+    context.restoreGState()
     guard let label else {
       drawWordmark(wordmark, in: context, centeredIn: tile, width: 640)
       return
@@ -195,9 +236,11 @@ func renderInitialIcon(wordmark: CGImage, top: CGColor, bottom: CGColor) -> CGIm
 }
 
 switch args[1] {
-case "icon" where args.count == 5 || args.count == 8:
-  let label = args.count == 8 ? (text: args[5], fontPath: args[6], colour: parseHex(args[7])) : nil
-  writePNG(renderIcon(wordmark: loadImage(args[2]), background: parseHex(args[3]), label: label), to: args[4])
+case "icon" where args.count == 5 || args.count == 8 || args.count == 9:
+  let label = args.count >= 8 ? (text: args[5], fontPath: args[6], colour: parseHex(args[7])) : nil
+  var wordmark = loadImage(args[2])
+  if args.count == 9 { wordmark = recolourOrange(wordmark, to: parseHex(args[8])) }
+  writePNG(renderIcon(wordmark: wordmark, background: args[3], label: label), to: args[4])
 case "icon-logo" where args.count == 4:
   let logo = loadImage(args[2])
   writePNG(render(width: 1024, height: 1024) { $0.draw(logo, in: tile) }, to: args[3])

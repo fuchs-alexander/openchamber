@@ -156,6 +156,9 @@ Das gemeinsame „nb“ in der Menüleiste unterschied die Apps nicht; ersetzt d
 **Posylka und Sofasx (2026-10-03)**
 `posylka` (`de.nomobo.posylka`, `https://openchamber.colibo.io/`, Dock-Icon wie das posylka.de-Favicon: weißes „P“ auf Orange-Verlauf, aus dem Vektor-Logo gebaut, Menüleiste P) und `sofasx` (`de.nomobo.sofasx`, `https://af.oc.nomobo.de/`, OKES-Logo von mebleokes.com, Menüleiste S) sind gebaut, installiert, mit übernommenem Zugang verbunden (Token vom Server akzeptiert) und nach Neustart geprüft. Das OKES-Logo gibt es nur in 189 px; das Dock-Icon ist dadurch leicht weich.
 
+**Einheitliche nomobo-Icons und nomobolocal (2026-10-04)**
+Posylka und Sofasx tragen jetzt „nomobo / POSYLKA“ auf Orange bzw. „nomobo / OKES“ auf Rot, mit dunklem „bo“ für Kontrast; ihre Firmenlogos bleiben in der Server-Auswahl. Neu: `nomobolocal` (`de.nomobo.nomobolocal`), lokaler Server auf den Daten der Original-OpenChamber (`shareUpstreamData`), Icon „nomobo / LOCAL“, Menüleiste L. Die App verweigert den Start, solange OpenChamber läuft (geprüft: Dialog, kein Server, kein OpenCode, OpenChamber-Daten unverändert). Den Betrieb mit lokalem Server konnte ich nicht selbst testen, weil dafür OpenChamber beendet werden müsste, in der diese Arbeitssitzung läuft.
+
 **Vorfall beim Dev-Modus-Test**
 Upstream-`electron:dev` startet einen HMR-Hilfsserver, der zunächst das Profil nicht kannte und die Original-Daten unter `~/.config/openchamber` nutzte. Bei zwei Testläufen (21:58 und 22:01) hat er je eine wartende Nachricht aus der Warteschlange der laufenden Agent-Session an seinen eigenen, kurz danach beendeten OpenCode gesendet. Die Nachricht von 22:01 hat der Nutzer möglicherweise nicht zugestellt bekommen. Behoben in `a41953c`: Bei einem Profil bekommt jeder Dev-Prozess das Profil-Datenverzeichnis, und ein Profil ohne lokalen Server startet gebündelte UI ohne Hilfsserver und ohne lokales OpenCode. Mit leerem Temp-`HOME` geprüft.
 

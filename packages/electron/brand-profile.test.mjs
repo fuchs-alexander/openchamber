@@ -10,6 +10,7 @@ import {
   brandDevEnvironment,
   brandRuntimePaths,
   parseBrandProfile,
+  isUpstreamAppRunning,
   readActiveBrandProfile,
   resolveBrandProfile,
   sanitizeBrandLogoId,
@@ -88,7 +89,7 @@ test('every checked-in profile has its icon, menu bar icons and switcher logo', 
       assert.equal(trayLetters.has(idle), false, `${profile.profileId} shares its menu bar icon with ${trayLetters.get(idle)}`);
       trayLetters.set(idle, profile.profileId);
     }
-    if (profile.defaultHost.brandLogoId) {
+    if (profile.defaultHost?.brandLogoId) {
       const logo = path.join(repoRoot, 'packages', 'ui', 'src', 'assets', 'brand-logos', `${profile.defaultHost.brandLogoId}.png`);
       assert.ok(fs.existsSync(logo), `${profile.profileId}: ${logo}`);
     }
@@ -110,7 +111,7 @@ test('a profile id cannot escape the profiles directory', () => {
 });
 
 test('missing required fields are rejected by name', () => {
-  for (const field of ['profileId', 'displayName', 'bundleId', 'iconPath', 'updatesEnabled', 'localServer', 'registerDeepLinkProtocol', 'defaultHost']) {
+  for (const field of ['profileId', 'displayName', 'bundleId', 'iconPath', 'updatesEnabled', 'localServer', 'registerDeepLinkProtocol']) {
     const raw = validProfile();
     delete raw[field];
     assert.throws(() => parseBrandProfile(raw), new RegExp(`"${field}"`), field);
@@ -118,6 +119,61 @@ test('missing required fields are rejected by name', () => {
   const raw = validProfile();
   delete raw.defaultHost.url;
   assert.throws(() => parseBrandProfile(raw), /"defaultHost.url"/);
+});
+
+test('a profile without a local server needs a default host, one with a local server does not', () => {
+  const remote = validProfile();
+  delete remote.defaultHost;
+  assert.throws(() => parseBrandProfile(remote), /"defaultHost"/);
+  const local = validProfile();
+  delete local.defaultHost;
+  local.localServer = true;
+  assert.equal(parseBrandProfile(local).defaultHost, undefined);
+});
+
+test('a profile sharing upstream data uses the OpenChamber settings directory but its own Electron profile', () => {
+  const raw = validProfile();
+  raw.localServer = true;
+  raw.shareUpstreamData = true;
+  const profile = parseBrandProfile(raw);
+  const paths = brandRuntimePaths(profile, { appDataDir: '/A', homeDir: '/H' });
+  assert.equal(paths.dataDir, '/H/.config/openchamber');
+  assert.equal(paths.userDataDir, '/A/nomobodev');
+  const dev = brandRuntimePaths(profile, { appDataDir: '/A', homeDir: '/H', development: true });
+  assert.equal(dev.dataDir, '/H/.config/nomobodev-dev', 'development never touches the real OpenChamber data');
+});
+
+test('sharing upstream data requires a local server', () => {
+  const raw = validProfile();
+  raw.shareUpstreamData = true;
+  assert.throws(() => parseBrandProfile(raw), /"shareUpstreamData"/);
+});
+
+test('seeding is skipped for a profile without a default host', () => {
+  const raw = validProfile();
+  delete raw.defaultHost;
+  raw.localServer = true;
+  const root = {};
+  assert.equal(seedBrandDefaultHost(root, parseBrandProfile(raw)), false);
+  assert.deepEqual(root, {});
+});
+
+test('detects a running upstream OpenChamber from its Electron single-instance lock', () => {
+  withTempDir((appDataDir) => {
+    const isProcessAlive = (pid) => pid === 4242;
+    assert.equal(isUpstreamAppRunning({ appDataDir, isProcessAlive }), false, 'no profile directory');
+    const lockDir = path.join(appDataDir, 'OpenChamber');
+    fs.mkdirSync(lockDir);
+    assert.equal(isUpstreamAppRunning({ appDataDir, isProcessAlive }), false, 'no lock');
+    fs.symlinkSync('My-Mac.local-4242', path.join(lockDir, 'SingletonLock'));
+    assert.equal(isUpstreamAppRunning({ appDataDir, isProcessAlive }), true, 'live pid');
+    fs.unlinkSync(path.join(lockDir, 'SingletonLock'));
+    fs.symlinkSync('My-Mac.local-777', path.join(lockDir, 'SingletonLock'));
+    assert.equal(isUpstreamAppRunning({ appDataDir, isProcessAlive }), false, 'stale lock');
+    fs.unlinkSync(path.join(lockDir, 'SingletonLock'));
+    fs.symlinkSync('garbage', path.join(lockDir, 'SingletonLock'));
+    assert.equal(isUpstreamAppRunning({ appDataDir, isProcessAlive }), false, 'malformed lock');
+  });
 });
 
 test('rejects a default host that is not plain https or that carries credentials', () => {

@@ -17,6 +17,8 @@ import { z } from 'zod';
 
 export const BRAND_PROFILE_RESOURCE_NAME = 'brand-profile.json';
 const UPSTREAM_BUNDLE_ID = 'dev.openchamber.desktop';
+const UPSTREAM_APP_NAME = 'OpenChamber';
+const UPSTREAM_DATA_DIR_NAME = 'openchamber';
 const RESERVED_HOST_ID = 'local';
 const PROFILE_ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 const CREDENTIAL_KEY_PATTERN = /token|secret|password|authorization/i;
@@ -73,9 +75,19 @@ const brandProfileSchema = z.strictObject({
   trayIconsDir: requiredString.optional(),
   updatesEnabled: requiredBoolean,
   localServer: requiredBoolean,
+  shareUpstreamData: requiredBoolean.optional(),
   registerDeepLinkProtocol: requiredBoolean,
-  defaultHost: defaultHostSchema,
-}, 'expected a JSON object');
+  defaultHost: defaultHostSchema.optional(),
+}, 'expected a JSON object').superRefine((profile, context) => {
+  // A remote-only app has nothing to start on without its instance.
+  if (!profile.localServer && !profile.defaultHost) {
+    context.addIssue({ code: 'custom', path: ['defaultHost'], message: 'is required for a profile without a local server' });
+  }
+  // Shared data only makes sense for the local server that owns it.
+  if (profile.shareUpstreamData && !profile.localServer) {
+    context.addIssue({ code: 'custom', path: ['shareUpstreamData'], message: 'requires a local server' });
+  }
+});
 
 // Credentials belong in the user's settings, never in a profile that is
 // committed and copied into every app bundle.
@@ -139,10 +151,44 @@ export const readActiveBrandProfile = ({ packaged, resourcesPath, profilesDir, e
   return profileId ? resolveBrandProfile(profileId, { profilesDir }) : null;
 };
 
-export const brandRuntimePaths = (profile, { appDataDir, homeDir, development = false }) => ({
-  userDataDir: path.join(appDataDir, development ? `${profile.displayName} Dev` : profile.displayName),
-  dataDir: path.join(homeDir, '.config', development ? `${profile.displayName}-dev` : profile.displayName),
-});
+/**
+ * The Electron profile is always the app's own, so its single-instance lock,
+ * cookies and caches never mix with OpenChamber's. A `shareUpstreamData`
+ * profile uses OpenChamber's settings directory (projects, hosts, queues);
+ * development runs never do.
+ */
+export const brandRuntimePaths = (profile, { appDataDir, homeDir, development = false }) => {
+  const userDataDir = path.join(appDataDir, development ? `${profile.displayName} Dev` : profile.displayName);
+  if (development) return { userDataDir, dataDir: path.join(homeDir, '.config', `${profile.displayName}-dev`) };
+  const dataDirName = profile.shareUpstreamData ? UPSTREAM_DATA_DIR_NAME : profile.displayName;
+  return { userDataDir, dataDir: path.join(homeDir, '.config', dataDirName) };
+};
+
+const defaultIsProcessAlive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === 'EPERM';
+  }
+};
+
+/**
+ * Whether an installed upstream OpenChamber is running, read from the
+ * Chromium single-instance lock in its Electron profile (a symlink to
+ * `<host>-<pid>`). Two apps serving the same settings directory would both run
+ * its message queues, so a `shareUpstreamData` app refuses to start next to it.
+ */
+export const isUpstreamAppRunning = ({ appDataDir, isProcessAlive = defaultIsProcessAlive }) => {
+  let target;
+  try {
+    target = fs.readlinkSync(path.join(appDataDir, UPSTREAM_APP_NAME, 'SingletonLock'));
+  } catch {
+    return false;
+  }
+  const match = /-(\d+)$/.exec(target);
+  return Boolean(match) && isProcessAlive(Number(match[1]));
+};
 
 /**
  * Variables `electron:dev` adds to every dev process for a branded run. Only
@@ -171,6 +217,7 @@ export const brandDevEnvironment = ({ env, profilesDir, homeDir }) => {
  * stay untouched.
  */
 export const seedBrandDefaultHost = (root, profile) => {
+  if (!profile.defaultHost) return false;
   if (Object.prototype.hasOwnProperty.call(root, 'desktopHosts') || root.desktopInitialHostChoiceCompleted === true) {
     return false;
   }

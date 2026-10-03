@@ -31,6 +31,9 @@ const hostKey = (value) => {
 };
 
 export const importBrandHost = ({ targetRoot, sourceRoot, profile, replaceToken = false }) => {
+  if (!profile.defaultHost) {
+    throw new Error(`Profile "${profile.profileId}" has no default host to import`);
+  }
   const wanted = hostKey(profile.defaultHost.url);
   const sourceHosts = settingsHostsSchema.parse(sourceRoot ?? {}).desktopHosts
     .map((entry) => sourceHostSchema.safeParse(entry))

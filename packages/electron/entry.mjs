@@ -8,11 +8,11 @@
  * module evaluation runs on the thread Chromium needs to finish initialising.
  */
 
-import { app, protocol } from 'electron';
+import { app, dialog, protocol } from 'electron';
 import os from 'node:os';
 import path from 'node:path';
 import { shouldIgnoreLoopbackConnectionLimit } from './startup-url-selection.mjs';
-import { brandRuntimePaths } from './brand-profile.mjs';
+import { brandRuntimePaths, isUpstreamAppRunning } from './brand-profile.mjs';
 import {
   APP_USER_MODEL_ID,
   UI_PROTOCOL,
@@ -98,6 +98,19 @@ deferAppEventsUntilMainLoads();
 
 app.whenReady().then(async () => {
   recordEarlyStartupMark('electron.app.ready');
+  // A branded app that serves OpenChamber's own settings directory must not
+  // run next to OpenChamber: both local servers would work the same message
+  // queues and settings.
+  if (activeBrandProfile?.shareUpstreamData && !isDev && isUpstreamAppRunning({ appDataDir: app.getPath('appData') })) {
+    dialog.showMessageBoxSync({
+      type: 'warning',
+      message: `OpenChamber is running`,
+      detail: `${activeBrandProfile.displayName} uses the same local projects and settings as OpenChamber. Quit OpenChamber, then open ${activeBrandProfile.displayName} again.`,
+      buttons: ['OK'],
+    });
+    app.exit(0);
+    return;
+  }
   // The login shell runs in its own process; only its spawn touches this thread.
   if (!shellEnvironmentProbeBlocksMainThread) void startShellEnvironmentProbe().catch(() => {});
   // A login-item or --background launch has no window to show. Otherwise the

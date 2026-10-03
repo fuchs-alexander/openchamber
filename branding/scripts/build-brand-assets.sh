@@ -33,12 +33,19 @@ finish_profile() {
   echo "wrote $out/icon.icns and $out/tray"
 }
 
-# nomobo apps: wordmark plus a second line on the profile's background.
+# nomobo apps: wordmark plus a second line on the profile's background
+# ("#top:#bottom" for a gradient). An optional accent replaces the orange "bo"
+# where the background itself is orange or red.
 nomobo_icon() {
-  profile=$1 background=$2 label=$3 tray_letter=$4
+  profile=$1 background=$2 label=$3 tray_letter=$4 accent=${5:-}
   mkdir -p "$assets/$profile"
-  swift "$render" icon "$assets/nomobo-wordmark.png" "$background" "$assets/$profile/icon-1024.png" \
-    "$label" "$font" "$label_colour"
+  if [ -n "$accent" ]; then
+    swift "$render" icon "$assets/nomobo-wordmark.png" "$background" "$assets/$profile/icon-1024.png" \
+      "$label" "$font" "$label_colour" "$accent"
+  else
+    swift "$render" icon "$assets/nomobo-wordmark.png" "$background" "$assets/$profile/icon-1024.png" \
+      "$label" "$font" "$label_colour"
+  fi
   finish_profile "$profile" "$tray_letter"
 }
 
@@ -47,17 +54,13 @@ nomobo_icon nomobogaming '#1F1147' 'GAMING' 'G'
 # Navy of the nomobo-hosting folder icon (nomobo-hosting/assets/folder-icon.svg).
 nomobo_icon nomobohosting '#142B49' 'HOSTING' 'H'
 
-# Posylka: like the posylka.de favicon, a white "P" on its orange gradient
-# (colours measured from favicon-192x192.png). The "P" is the vector letter of
-# the posylka.de wordmark, so the icon stays sharp.
-mkdir -p "$assets/posylka"
-swift "$render" icon-initial "$assets/posylka-logo.svg" '#ED8420' '#E56226' "$assets/posylka/icon-1024.png"
-finish_profile posylka 'P'
-
-# Sofasx: the mebleokes.com OKES logo already is a tile and becomes the icon.
-mkdir -p "$assets/sofasx"
-swift "$render" icon-logo "$assets/okes-logo.webp" "$assets/sofasx/icon-1024.png"
-finish_profile sofasx 'S'
+# Posylka: the orange of the posylka.de favicon (measured from
+# favicon-192x192.png), "bo" in nomobo dark for contrast.
+nomobo_icon posylka '#ED8420:#E56226' 'POSYLKA' 'P' '#07090E'
+# Sofasx: the red of the mebleokes.com OKES logo, "bo" in nomobo dark.
+nomobo_icon sofasx '#FD0136' 'OKES' 'S' '#07090E'
+# Local OpenChamber replacement (shares OpenChamber's data).
+nomobo_icon nomobolocal '#0E3B36' 'LOCAL' 'L'
 
 # Host-switcher logos, about 61 px high to match the nomobo wordmark.
 swift "$render" logo "$assets/nomobo-wordmark.png" '#07090E' "$logos/nomobo.png"

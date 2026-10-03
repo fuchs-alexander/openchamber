@@ -13,10 +13,11 @@ Dieser Fork baut aus einem Codestand mehrere gebrandete macOS-Apps. Jede App ist
 | `claudi` | `nomobodev` | `de.nomobo.nomobodev.claudi` | `https://openchamber.c.nomobo.de/` | nomobo / DEV auf `#07090E` |
 | `nomobogaming` | `nomobogaming` | `de.nomobo.nomobogaming` | `http://100.100.6.17:3000/` (Tailscale) | nomobo / GAMING auf `#1F1147` |
 | `nomobohosting` | `nomobohosting` | `de.nomobo.nomobohosting` | `https://oc.nomobo.de/` | nomobo / HOSTING auf `#142B49` |
-| `posylka` | `posylka` | `de.nomobo.posylka` | `https://openchamber.colibo.io/` | weißes „P“ wie im Favicon von posylka.de |
-| `sofasx` | `sofasx` | `de.nomobo.sofasx` | `https://af.oc.nomobo.de/` | OKES-Logo von mebleokes.com |
+| `posylka` | `posylka` | `de.nomobo.posylka` | `https://openchamber.colibo.io/` | nomobo / POSYLKA auf dem Orange des posylka.de-Favicons |
+| `sofasx` | `sofasx` | `de.nomobo.sofasx` | `https://af.oc.nomobo.de/` | nomobo / OKES auf dem Rot des OKES-Logos |
+| `nomobolocal` | `nomobolocal` | `de.nomobo.nomobolocal` | lokaler Server, Daten von OpenChamber | nomobo / LOCAL auf `#0E3B36` |
 
-Menüleiste: jede App hat ihren Buchstaben in einer Kachel (D, G, H, P, S). Ein Test stellt sicher, dass keine zwei Profile dasselbe Menüleisten-Icon haben und dass Icon, Menüleisten-Icons und Auswahl-Logo jedes Profils existieren.
+Menüleiste: jede App hat ihren Buchstaben in einer Kachel (D, G, H, P, S, L). Ein Test stellt sicher, dass keine zwei Profile dasselbe Menüleisten-Icon haben und dass Icon, Menüleisten-Icons und Auswahl-Logo jedes Profils existieren.
 
 ## Was ein Profil steuert
 
@@ -28,8 +29,9 @@ Menüleiste: jede App hat ihren Buchstaben in einer Kachel (D, G, H, P, S). Ein 
 | `trayIconsDir` | optional: eigene Menüleisten-Icons (`trayTemplate-idle`, `-unseen`, `-breath-00` bis `-15`, je 1x und @2x). Die Statussymbole in den Menüzeilen bleiben die von Upstream. |
 | `updatesEnabled` | `false`: kein Update-Feed im Bundle, der Updater wird nicht eingerichtet, Update-Prüfung meldet immer "kein Update" |
 | `localServer` | `false`: kein lokaler OpenChamber-Server und kein lokales `opencode`. Ist der Server nicht erreichbar, zeigt die App eine Wiederholen-Seite statt auf "Local" zu wechseln. "Local" fehlt in der Server-Auswahl. |
+| `shareUpstreamData` | optional, nur mit `localServer: true`: die App nutzt OpenChamber's Einstellungsverzeichnis `~/.config/openchamber` (Projekte, Server, Warteschlangen). Das Electron-Profil bleibt eigenes. Die App startet nicht, solange OpenChamber läuft (Prüfung über OpenChamber's Single-Instance-Lock), und zeigt dann einen Hinweis. Die Gegenrichtung lässt sich nicht absichern: OpenChamber nicht starten, während nomobolocal läuft. Im Dev-Modus nutzt sie nie die echten Daten. |
 | `registerDeepLinkProtocol` | `false`: die App übernimmt `openchamber://` nicht von der Original-App |
-| `defaultHost` | Server, der bei leeren Einstellungen eingetragen und als Standard gesetzt wird. `brandLogoId` wählt ein Logo aus `packages/ui/src/assets/brand-logos/`. Die URL muss `https` sein. `http` ist nur für private Netze und Tailscale erlaubt (10/8, 172.16/12, 192.168/16, 100.64/10, Loopback, `*.ts.net`). |
+| `defaultHost` | Pflicht ohne lokalen Server. Server, der bei leeren Einstellungen eingetragen und als Standard gesetzt wird. `brandLogoId` wählt ein Logo aus `packages/ui/src/assets/brand-logos/`. Die URL muss `https` sein. `http` ist nur für private Netze und Tailscale erlaubt (10/8, 172.16/12, 192.168/16, 100.64/10, Loopback, `*.ts.net`). |
 
 Profile enthalten nie Zugangsdaten. Der Parser lehnt Felder mit `token`, `secret`, `password` oder `authorization` im Namen ab.
 
@@ -54,6 +56,7 @@ OPENCHAMBER_BRAND_PROFILE=sofasx bun run electron:build
 OPENCHAMBER_BRAND_PROFILE=nomobohosting bun run electron:build
 OPENCHAMBER_BRAND_PROFILE=posylka bun run electron:build
 OPENCHAMBER_BRAND_PROFILE=sofasx bun run electron:build
+OPENCHAMBER_BRAND_PROFILE=nomobolocal bun run electron:build
 ```
 
 Ergebnis: `packages/electron/dist/brand-<profil>/mac-arm64/<App>.app`, z. B. `brand-claudi/mac-arm64/nomobodev.app`. Der Build ist ad-hoc signiert und nicht notarisiert. Lokal gebaute Apps tragen kein Quarantäne-Attribut, deshalb startet macOS sie trotzdem. `spctl -a` meldet `rejected`. Das ist erwartet. Eine App, die heruntergeladen oder per AirDrop weitergegeben wird, blockiert Gatekeeper. Für Weitergabe braucht es eine Developer-ID-Signatur und Notarisierung.
@@ -137,14 +140,15 @@ Danach jede App wie oben installieren und kurz prüfen: verbindet sie sich, zeig
 
 Die Menüleisten-Icons (`branding/assets/<id>/tray/`) zeigen je einen Buchstaben in Poppins SemiBold in einer Umriss-Kachel, erzeugt von `render-tray-icons.swift`. Die Füllstufen für Ruhe, Ungelesen und Beschäftigt-Animation stammen aus den Upstream-Icons.
 
-Posylka: `branding/assets/posylka-logo.svg` ist das Vektor-Logo von `https://posylka.de/images/logo-2021.svg` (SHA-256 `29b81f8f7e5ba8aaf1a49413877f2aa8417ecd01f6d699ab977bec95979f2f8e`), die Quelle. Das Dock-Icon sieht aus wie das Favicon von posylka.de (weißes „P“ auf Orange-Verlauf). Die Website liefert das Favicon nur bis 192 px; deshalb setzt `render-brand-assets.swift icon-initial` das „P“ als Vektor-Buchstaben aus dem Logo auf den Verlauf, mit den aus `favicon-192x192.png` gemessenen Farben `#ED8420` → `#E56226`. In der Server-Auswahl steht das volle Logo auf Weiß.
+Posylka, Sofasx und nomobolocal tragen wie die anderen nomobo-Apps die nomobo-Wortmarke mit zweiter Zeile. Posylka liegt auf dem Orange-Verlauf des posylka.de-Favicons (`#ED8420` → `#E56226`, gemessen an `favicon-192x192.png`), Sofasx auf dem Rot des OKES-Logos von mebleokes.com (`#FD0136`). Auf diesen Farben verschwände das orange „bo“, daher ersetzt `render-brand-assets.swift icon … <accent>` es dort durch das nomobo-Dunkel `#07090E`. nomobolocal liegt auf `#0E3B36`.
 
-Sofasx: `branding/assets/okes-logo.webp` ist das Header-Logo von mebleokes.com (`https://mebleokes.com/media/img_699af1fec25197.22679346_1771762174.webp`, 189×189, SHA-256 `485ad05d5f2002ca8ef9ed207ec75688889ffd75a966866077e08902a290ad8b`). Eine größere Fassung liefert die Website nicht, deshalb ist das Dock-Icon etwas weich. Eine hochaufgelöste Datei kann die Quelle ersetzen; danach das Build-Skript laufen lassen und neu bauen.
+In der Server-Auswahl zeigen Posylka und Sofasx weiter die Logos ihrer Firmen: `branding/assets/posylka-logo.svg` (von `https://posylka.de/images/logo-2021.svg`, SHA-256 `29b81f8f…`) auf Weiß und `branding/assets/okes-logo.webp` (Header-Logo von mebleokes.com, 189×189, SHA-256 `485ad05d…`).
 
 ## Bekannte Grenzen
 
 - Kein Auto-Update. Updates laufen manuell wie oben beschrieben.
 - Ad-hoc-Signatur, keine Notarisierung (siehe "App bauen").
+- nomobolocal hat keinen Auto-Updater, die Original-OpenChamber aktualisiert sich aber selbst. Beide teilen sich die Daten; nomobolocal daher auf demselben Upstream-Stand bauen wie die installierte OpenChamber.
 - Einige feste Texte nennen noch "OpenChamber": Fenstertitel (z. B. "motolio | Claudi | OpenChamber"), "About OpenChamber" im App-Menü, Tray-Menü. Funktional hat das keine Folgen.
 - Die Meldung "Remote instance update" in der Server-Auswahl bezieht sich auf die Server-Version, nicht auf die App.
 - Der Anmeldebildschirm zeigt den Upstream-Hinweis "Use Local if remote is unreachable", obwohl die Apps kein Local haben.

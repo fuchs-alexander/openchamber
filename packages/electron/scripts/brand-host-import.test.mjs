@@ -147,3 +147,17 @@ test('error messages never contain the token', () => {
   }
   assert.fail('expected an error');
 });
+
+test('a profile without a default host has nothing to import', () => {
+  const local = parseBrandProfile({
+    profileId: 'nomobolocal',
+    displayName: 'nomobolocal',
+    bundleId: 'de.nomobo.nomobolocal',
+    iconPath: 'branding/assets/nomobolocal/icon.icns',
+    updatesEnabled: false,
+    localServer: true,
+    shareUpstreamData: true,
+    registerDeepLinkProtocol: false,
+  });
+  assert.throws(() => importBrandHost({ targetRoot: {}, sourceRoot: source(), profile: local }), /has no default host/);
+});
