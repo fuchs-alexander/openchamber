@@ -4,7 +4,7 @@ Dieser Fork baut aus einem Codestand mehrere gebrandete macOS-Apps. Jede App ist
 
 ## Stand
 
-- Upstream-Basis: Release `v2.1.0`, Commit `90726f9949da3408b2baf0f997e24bd71455946e`.
+- Upstream-Basis: Release `v2.1.1`, Commit `e302062e3be0686986594fddabdafd8a97c129e5`.
 - Fork: `github.com/fuchs-alexander/openchamber`, Branch `nomobo`. Remotes: `origin` ist der Fork, `upstream` ist `openchamber/openchamber`.
 - Profile:
 
@@ -53,9 +53,6 @@ OPENCHAMBER_BRAND_PROFILE=nomobogaming bun run electron:build
 OPENCHAMBER_BRAND_PROFILE=nomobohosting bun run electron:build
 OPENCHAMBER_BRAND_PROFILE=posylka bun run electron:build
 OPENCHAMBER_BRAND_PROFILE=sofasx bun run electron:build
-OPENCHAMBER_BRAND_PROFILE=nomobohosting bun run electron:build
-OPENCHAMBER_BRAND_PROFILE=posylka bun run electron:build
-OPENCHAMBER_BRAND_PROFILE=sofasx bun run electron:build
 OPENCHAMBER_BRAND_PROFILE=nomobolocal bun run electron:build
 ```
 
@@ -73,9 +70,9 @@ codesign --verify --deep --strict "$A"
 
 ## Installieren und manuell aktualisieren
 
-1. nomobodev beenden (Cmd+Q).
-2. Neue App kopieren: `ditto packages/electron/dist/brand-claudi/mac-arm64/nomobodev.app /Applications/nomobodev.app`. Bei einem Update vorher die alte `/Applications/nomobodev.app` löschen oder überschreiben. `/Applications/OpenChamber.app` nie anfassen.
-3. Starten. Zugang, Serverauswahl und Fenster bleiben erhalten, weil sie außerhalb des Bundles liegen (`~/.config/nomobodev/`, `~/Library/Application Support/nomobodev/`).
+1. Quit the app with Cmd+Q. Confirm its main process and helpers have exited. Do not quit nomobolocal while it hosts the agent doing the update; finish the repository work first, then replace that app from a separate terminal.
+2. Preserve the old bundle outside `/Applications` for rollback. Stage the new app next to its destination, verify its signature, then replace the complete bundle. Copying over an existing bundle can leave obsolete files behind. Leave `/Applications/OpenChamber.app` unchanged.
+3. Start the new app. Its connection, selected server and window settings live outside the bundle in `~/.config/<displayName>/` and `~/Library/Application Support/<displayName>/`. Do not reimport credentials during an ordinary update.
 
 Damit das Icon dauerhaft im Dock bleibt: Rechtsklick auf das laufende Icon, "Optionen", "Im Dock behalten".
 
@@ -98,15 +95,23 @@ Optionen: `--from <settings.json>` (Standard `~/.config/openchamber/settings.jso
 
 ## Upstream-Release übernehmen
 
-Upstream-Änderungen werden einmal im Fork übernommen und gelten dann für alle Profile.
+Upstream changes are merged once into `nomobo` and apply to every profile. Use a published stable release tag, not an unchecked `upstream/main`.
+
+### Prepare and merge
+
+1. Read this guide and the current repository instructions. Check `git status --short --branch`; preserve uncommitted work separately before merging. Keep a copy of this guide if it already has local changes.
+2. Confirm the stable release at `https://github.com/openchamber/openchamber/releases/latest`. Read its release notes, especially security fixes and bundled OpenCode changes. Record the selected tag and commit.
+3. Create a backup branch at the current fork HEAD. Choose a unique name for each update, for example `backup/nomobo-before-v2.1.1-20261005`.
 
 ```sh
+git branch backup/nomobo-before-vX.Y.Z-YYYYMMDD
 git fetch upstream --tags
-git checkout nomobo
-git merge vX.Y.Z            # Release-Tag, nicht ungeprüft upstream/main
+git rev-parse 'vX.Y.Z^{commit}'
+# Continue only on nomobo, with unrelated changes preserved.
+git merge --no-commit --no-ff vX.Y.Z
 ```
 
-Konflikte entstehen am ehesten in diesen Dateien:
+Inspect both conflicted and automatically merged fork files. Keep the branding behavior and the new upstream protections together; do not resolve whole files by choosing only one side. Likely overlap:
 
 - `packages/electron/entry.mjs`: Name, `userData`, Datenverzeichnis, lokaler Server
 - `packages/electron/early-startup.mjs`: `activeBrandProfile`, App-User-Model-ID
@@ -114,18 +119,77 @@ Konflikte entstehen am ehesten in diesen Dateien:
 - `packages/electron/scripts/package.mjs`, `scripts/after-pack.cjs`
 - `packages/ui/src/lib/desktopHosts.ts`, `components/desktop/DesktopHostSwitcher.tsx`, `components/layout/Header.tsx`
 
-Nach dem Merge:
+The fork-specific invariants are separate app identities and data directories, no local server for remote-only profiles, no upstream updater or deep-link registration, safe default-host seeding, and host logos. Preserve nomobolocal's shared-data startup lock. The removed continuous preferences sync must stay absent.
+
+### Validate and build
+
+Run from the repository root. Test processes must not inherit the running desktop app's `OPENCHAMBER_DATA_DIR`: the SSH fixture changes HOME but otherwise still reads the live app's Git identity store.
 
 ```sh
-bun install
-bun run --cwd packages/electron test
-bun run --cwd packages/ui test
+export PATH="$HOME/.bun/bin:$PATH"
+bun install --frozen-lockfile
+env -u OPENCHAMBER_DATA_DIR bun run --cwd packages/electron test
+env -u OPENCHAMBER_DATA_DIR bun run --cwd packages/ui test
+env -u OPENCHAMBER_DATA_DIR bun run --cwd packages/web test
 bun run type-check
+bun run lint
+bun run dead-code
 OPENCHAMBER_BRAND_PROFILE=claudi bun run electron:build
 OPENCHAMBER_BRAND_PROFILE=nomobogaming bun run electron:build
+OPENCHAMBER_BRAND_PROFILE=nomobohosting bun run electron:build
+OPENCHAMBER_BRAND_PROFILE=posylka bun run electron:build
+OPENCHAMBER_BRAND_PROFILE=sofasx bun run electron:build
+OPENCHAMBER_BRAND_PROFILE=nomobolocal bun run electron:build
 ```
 
-Danach jede App wie oben installieren und kurz prüfen: verbindet sie sich, zeigt die Server-Auswahl das Logo, laufen Original-App und gebrandete App nebeneinander.
+For a single unchanged source tree, the first full `electron:build` prepares the shared UI, bundled CLI, main bundle and native modules. Remaining profiles can reuse those assets with `OPENCHAMBER_BRAND_PROFILE=<id> node scripts/package.mjs` from `packages/electron`. Run packaging sequentially because it shares staging files. Do not run that script from the repository root: it resolves Electron Builder and the after-pack hook relative to its working directory. If source or dependencies change, repeat the full build first.
+
+Before installation, check each bundle's version, bundle ID, embedded profile, icons and `codesign --verify --deep --strict`. No branded bundle may contain `app-update.yml`. Confirm the bundled OpenCode version matches `packages/electron/package.json`. Read the dead-code report; it is non-blocking and can contain upstream findings.
+
+Finish the merge only after resolving conflicts and recording validation. Update this guide's basis and add an update record with the tag, conflict decisions, test results, installed profiles, backup location and any remaining manual checks. Keep unrelated local documentation edits unstaged. A push is a separate action.
+
+### Install and rollback
+
+Back up each installed bundle before replacement, for example under `~/Library/Application Support/nomobodev-update-backups/<date>/`. Keep backups outside `/Applications` so macOS does not register duplicate apps there. Stage and verify all new bundles before stopping working apps. Replace one complete app at a time. If replacement fails, put its old bundle back before continuing with another profile.
+
+When an agent running inside a desktop app launches another branded app, set its data directory explicitly with `open --env`. The child can otherwise inherit the parent app's `OPENCHAMBER_DATA_DIR`, which takes precedence over its brand profile. For example, `open -a /Applications/posylka.app --env "OPENCHAMBER_DATA_DIR=$HOME/.config/posylka"`. Use the target profile's directory from `brandRuntimePaths`, not the directory of the agent's own app. Verify the new process's selected data directory before calling the launch isolated.
+
+Check each restarted app connects to its intended server, retains its login, shows the right host logo and has no unexpected Local option. Remote-only apps may run beside the original OpenChamber. Test nomobolocal separately with the original closed; never run both on their shared data. Its version should match the installed original before shared-data use. Updating the original or remote servers requires its own approval.
+
+For rollback, quit the affected app, move its new bundle aside, restore the old complete bundle and verify its signature before launch. Leave settings and credentials alone. An old bundle does not reverse data migrations; nomobolocal shares OpenChamber data, so assess release compatibility before downgrading it.
+
+### Update record: 2026-10-05, v2.1.0 to v2.1.1
+
+- Release commit: `e302062e3be0686986594fddabdafd8a97c129e5`. The release includes desktop security fixes and bundled OpenCode `2.0.22`.
+- Source rollback point: `backup/nomobo-before-v2.1.1-20261005`.
+- Merge commit: `a3526b594`. The guide's pre-existing local edits and this update record were kept out of the merge commit and are committed separately. No push was performed.
+- Conflicts: imports in `early-startup.mjs` and `main.mjs`. Kept branding imports together with upstream `remote-page-policy.mjs` and `packaged-ui-routing.mjs` imports. Other fork changes merged automatically.
+- Electron: 36/36 test files passed. UI: 729/729 test files passed. Workspace type-check passed. Lint passed with five upstream React Hook warnings.
+- The first Web run inherited the live app's data directory and hit a timeout. The SSH fixture passed after removing `OPENCHAMBER_DATA_DIR` from its environment. The next full run had one transfer-cap fixture failure; that test passed alone. The final full isolated run passed: 356 test files, 6,333 tests; nine files and 127 tests skipped.
+- Dead-code analysis ran. It reported upstream unused files, exports and types; no branding-related finding was reported. No unrelated cleanup was performed. The upstream merge also contains whitespace findings from `git diff --check`; the edited conflict files and this guide passed their focused whitespace check.
+- All six macOS arm64 apps were built and checked for version `2.1.1`, correct bundle ID and embedded profile, tray assets, no `app-update.yml`, valid ad-hoc signature and bundled OpenCode `2.0.22`. The main bundle contains no `nomobo-shared` preferences-sync reference.
+- Installed and restarted: `nomobodev`, `nomobogaming`, `nomobohosting`, `posylka`, `sofasx`. Each new main process was verified running from `/Applications`. Login, server connection, host-logo rendering and HMR development behavior still need a visual check; process checks do not prove these.
+- Backups of all six old apps: `~/Library/Application Support/nomobodev-update-backups/2026-10-05-v2.1.0/`. The five replaced original bundles are also retained there as `<displayName>.replaced.app`. No credentials were reimported and the original OpenChamber bundle was left unchanged.
+- nomobolocal is built but not installed: the running `2.1.0` app hosts this update session. Its new bundle is `packages/electron/dist/brand-nomobolocal/mac-arm64/nomobolocal.app`. The `2.1.1` bundle was started with an isolated HOME, data directory and Electron profile: its loopback `/health` returned `status: ok`, it exited cleanly, and its test port closed. This does not test the real shared-data profile or rendered UI. Desktop chooses its own dynamic backend port, so discover the test process's actual listener rather than assuming `OPENCHAMBER_PORT` selects it.
+- Scoped read-only review found no critical or important fork integration issue. The full upstream release was not independently audited. No Windows, Linux, VS Code or mobile runtime tests were run.
+
+Before replacing nomobolocal, end this session and quit the app from a separate terminal or through Cmd+Q. Confirm its main process and helpers have exited. The original OpenChamber is also still `2.1.0`; settle its separate update before using nomobolocal `2.1.1` on their shared data. Then stage the new nomobolocal bundle, verify its signature, move the old installed bundle to a uniquely named backup outside `/Applications`, and move the staged app into `/Applications/nomobolocal.app`. Never delete the shared settings to make an update start.
+
+### Follow-up: local sessions appeared missing
+
+The local database still held 84 sessions and 2,703 messages. Of these, 76 unarchived sessions belonged to `/Users/afuchs/Openchamber`; the selected project was `/Users/afuchs/www/nomobodev`, which had six sessions. The running local backend's official session-list API also returned 76 sessions for `/Users/afuchs/Openchamber`. No session restore was performed.
+
+The update launcher had started Posylka and Sofasx with the local agent's `OPENCHAMBER_DATA_DIR=/Users/afuchs/.config/openchamber`. Both were stopped and relaunched with their own explicit directories, verified on the new processes. A private local-settings snapshot was saved under `~/Library/Application Support/nomobodev-update-backups/2026-10-05-session-diagnosis/`; its contents must not be committed or logged. Two nomobolocal processes were also observed on different loopback ports. Neither was stopped during diagnosis because the current session runs on the first one. Database presence and an API list do not establish that the user has selected the matching project and Local instance in the UI.
+
+### Completing nomobolocal from its own agent session
+
+The user approved completing the local update after the data backup. A one-shot helper is prepared under `~/Library/Application Support/nomobodev-update-backups/local-v2.1.1-20261005b/`. Its `opencode.before-shutdown.db` is a consistent SQLite backup with a passing integrity check, containing 84 sessions and 2,759 messages at preparation time. The complete `2.1.1` app is staged and its signature checked before shutdown.
+
+Run the helper through the user's launchd, not as a child of the OpenCode process it must stop. It waits 25 seconds so the current answer can finish, refuses to run alongside original OpenChamber, signals the running nomobolocal main processes, and waits for their helpers and database writers to exit. It then creates `opencode.stopped.db`, copies OpenChamber/OpenCode settings and the Electron profile into the private backup directory, preserves the old complete bundle, and installs the staged app. It launches the updated app with the explicit shared data directory.
+
+The helper's `result.json` is the completion evidence. `phase: complete` requires the installed version and loopback health to report `2.1.1`, OpenCode to be ready, a passing database integrity check, and every backed-up session and message ID to remain present. A scheduled or installed phase is not completion. On failure, inspect the recorded phase and preserved bundles/backups before retrying; do not automatically restore an older database over a live one. The original OpenChamber app remains `2.1.0` and must stay closed during this handoff. A separate original-app update is still needed before alternating versions on their shared data.
+
+For future backups, use SQLite's backup API instead of copying a live `.db` file without its WAL. Verify completed standalone snapshots with `mode=ro&immutable=1`; this avoids macOS read-only WAL bookkeeping failures when the snapshot has no sidecar files. Use immutable mode only for completed static snapshots, never for the changing live database.
 
 ## Weiteres Profil anlegen
 
@@ -143,6 +207,23 @@ Die Menüleisten-Icons (`branding/assets/<id>/tray/`) zeigen je einen Buchstaben
 Posylka, Sofasx und nomobolocal tragen wie die anderen nomobo-Apps die nomobo-Wortmarke mit zweiter Zeile. Posylka liegt auf dem Orange-Verlauf des posylka.de-Favicons (`#ED8420` → `#E56226`, gemessen an `favicon-192x192.png`), Sofasx auf dem Rot des OKES-Logos von mebleokes.com (`#FD0136`). Auf diesen Farben verschwände das orange „bo“, daher ersetzt `render-brand-assets.swift icon … <accent>` es dort durch das nomobo-Dunkel `#07090E`. nomobolocal liegt auf `#0E3B36`.
 
 In der Server-Auswahl zeigen Posylka und Sofasx weiter die Logos ihrer Firmen: `branding/assets/posylka-logo.svg` (von `https://posylka.de/images/logo-2021.svg`, SHA-256 `29b81f8f…`) auf Weiß und `branding/assets/okes-logo.webp` (Header-Logo von mebleokes.com, 189×189, SHA-256 `485ad05d…`).
+
+## Lehren aus der Einrichtung
+
+### 2026-10-03 `electron:dev` griff auf die Original-Daten zu
+**Problem:** Der HMR-Hilfsserver von `electron:dev` kannte das Profil nicht und nutzte `~/.config/openchamber`. Er hat wartende Nachrichten der laufenden OpenChamber-Session an seinen eigenen OpenCode geschickt.
+**Lösung:** `brandDevEnvironment` gibt jedem Dev-Prozess das Profil-Datenverzeichnis; ein Profil ohne lokalen Server läuft im Dev-Modus mit gebündelter UI, ohne Hilfsserver und ohne lokales OpenCode.
+**Dateien:** `packages/electron/brand-profile.mjs`, `packages/electron/scripts/electron-dev.mjs`
+
+### 2026-10-04 `osascript … quit` startet nicht laufende Apps
+**Problem:** `tell application id "…" to quit` an eine nicht laufende App kann sie starten. So lief nomobolocal plötzlich auf den OpenChamber-Daten (OpenChamber lief gerade nicht, die Startsperre griff daher nicht).
+**Lösung:** Laufende Apps über ihre Prozess-ID (`kill <pid>`) beenden, nie per AppleScript an nicht laufende Apps senden. Beim Austausch eines Bundles vorher prüfen, dass kein alter Prozess mehr läuft; sonst aktiviert `open -a` den alten Prozess.
+
+### 2026-10-04 Dauer-Abgleich der Einstellungen hat Werte verschleppt
+**Problem:** Ein laufender Abgleich zwischen allen Servern nahm Felder, die nur ein Server gesetzt hatte, in die gemeinsame Datei auf und verteilte sie auf alle anderen, auch auf die Referenz Gaming. Gewünscht war nur eine einmalige Kopie von Gaming.
+**Lösung:** Dauer-Abgleich aus dem Code entfernt; das Skript für eine einmalige Kopie wurde auf Wunsch ebenfalls verworfen. Die installierten Apps enthalten den Abgleich noch, bis sie neu gebaut sind; `~/.config/nomobo-shared/preferences.json` ist bis dahin absichtlich ungültig und darf nicht gelöscht werden. Sicherungen: `~/.config/nomobo-shared/backups/`.
+
+Update on 2026-10-05: the five remote apps were replaced with builds without the sync. The running nomobolocal `2.1.0` has not yet been replaced, so keep the deliberately invalid shared preferences file until its update is complete.
 
 ## Bekannte Grenzen
 
