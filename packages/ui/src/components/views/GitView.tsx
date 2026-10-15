@@ -1,4 +1,3 @@
-import { isCompleteIdentity } from '@/lib/api/git-identity';
 import React from 'react';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -76,6 +75,7 @@ import { isConflictedStatusFile } from './git/changeStatus';
 import { getFreshestSourceControlStatusForBranch, useGitHubPrStatusStore } from '@/stores/useGitHubPrStatusStore';
 import { getSourceControlAuthKey, getSourceControlReadContextAuthState, useSourceControlAuthStore, useConnectedAccountIds } from '@/stores/useSourceControlAuthStore';
 import { useRepositoryBinding } from '@/lib/source-control/repository-binding';
+import { hasConfigChangedGrant } from '@/lib/source-control/types';
 import { createGitIndexMutationQueue, type GitIndexMutationDirection, type GitIndexMutationQueue } from './git/gitIndexMutationQueue';
 import type { GitRemote } from '@/lib/gitApi';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
@@ -93,12 +93,9 @@ import { ContributorDestinationDialog } from './git/ContributorDestinationDialog
 import { useContributorDestinationChooser } from './git/contributorDestination';
 import { RepositoryConfigurationDialog } from '@/components/sections/openchamber/SourceControlBindingSettings';
 import { applyIdentityToRepository, identityApplicability, type IdentityApplicability } from '@/lib/source-control/applyIdentity';
-import { remoteTraits,
-  selectableIdentities,
-  identityDisplayName,
-  identityAccountConnected,
-  activeIdentityFor,
-} from '@/lib/source-control/identity';
+import { remoteTraits, identityDisplayName } from '@/lib/source-control/identity';
+import { activeAuthor, offeredAuthors } from './git/gitAuthors';
+import { dirtySwitchPushTarget } from './git/dirtySwitchPushTarget';
 import { mapWithConcurrency } from '@/lib/concurrency';
 
 type SyncAction = 'fetch' | 'pull' | 'sync' | 'publish' | null;
@@ -226,25 +223,6 @@ const isUnstagedStatusFile = (file: GitStatus['files'][number]): boolean => {
   return Boolean(workingStatus || indexStatus === '?');
 };
 
-// Where a dirty branch switch publishes the commit it just made. A tracked
-// branch goes to its tracking ref (local `my-topic` tracking `origin/topic`
-// pushes to `origin/topic`, so the upstream it re-asserts is the same one); an
-// untracked branch publishes under its own name on the fallback remote.
-const dirtySwitchPushTarget = (
-  branch: string,
-  tracking: string | null | undefined,
-  knownRemoteNames: string[],
-  fallbackRemoteName: string | null,
-): { remoteName: string; destinationRef: string } | null => {
-  if (tracking) {
-    const remoteName = knownRemoteNames
-      .filter((name) => tracking.startsWith(`${name}/`) && tracking.length > name.length + 1)
-      .sort((a, b) => b.length - a.length)[0];
-    if (remoteName) return { remoteName, destinationRef: `refs/heads/${tracking.slice(remoteName.length + 1)}` };
-  }
-  return fallbackRemoteName ? { remoteName: fallbackRemoteName, destinationRef: `refs/heads/${branch}` } : null;
-};
-
 type GitViewProps = {
   isActive: boolean;
 };
@@ -317,7 +295,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   // stale-selection recovery; data fetching below keys off its result.
   const { rootIsGitRepo, gitDirectory, nestedRepos } = useNestedGitDirectory(
     currentDirectory ?? null,
-    { enabled: isActive },
+    { enabled: isActive, recheckOnOpen: true },
   );
   const isGitRepo = useIsGitRepo(gitDirectory ?? null);
   const status = useGitStatus(gitDirectory ?? null);
@@ -392,10 +370,11 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   const identityAttention = React.useMemo(() => {
     const read = binding.read;
     if (!read?.binding || binding.status !== 'ready' || read.binding.state === 'bound') return null;
-    // The commonest way a binding stops matching is a remote added, renamed or
-    // repointed after the identity was applied. That has a remedy the generic
-    // words do not name — choose the identity again — so it is said here.
-    return read.binding.configRevision !== read.repository.configRevision
+    // The commonest way a binding stops matching is a bound remote renamed,
+    // repointed or removed after the identity was applied. That has a remedy
+    // the generic words do not name — choose the identity again — so it is
+    // said here.
+    return hasConfigChangedGrant(read.binding)
       ? t('gitView.identity.configChanged')
       : t('gitView.context.needsAttention');
   }, [binding.read, binding.status, t]);
@@ -1619,9 +1598,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
 
   const connectedAccountIds = useConnectedAccountIds();
   const availableIdentities = React.useMemo(
-    () => selectableIdentities(profiles, globalIdentity,
-      (identity) => isCompleteIdentity(identity)
-        && identityAccountConnected(identity, connectedAccountIds)),
+    () => offeredAuthors(profiles, globalIdentity, connectedAccountIds),
     [profiles, globalIdentity, connectedAccountIds],
   );
 
@@ -1632,9 +1609,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     ? binding.read.binding?.providers.find((provider) => provider.readiness === 'ready')?.accountId ?? null
     : undefined;
   const activeIdentityProfile = React.useMemo(
-    () => activeIdentityFor(profiles, globalIdentity, currentIdentity, (author) => ({
-      id: 'local-config', name: author.userName, ...author, color: 'info', icon: 'user',
-    }), boundAccountId),
+    () => activeAuthor(profiles, globalIdentity, currentIdentity, boundAccountId),
     [boundAccountId, currentIdentity, profiles, globalIdentity],
   );
 
@@ -2420,6 +2395,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     // none found, or settling on the auto-selected repository).
     return (
       <NestedRepoResolutionStates
+        root={currentDirectory}
         rootIsGitRepo={rootIsGitRepo}
         resolvedIsGitRepo={isGitRepo}
         nestedRepos={nestedRepos}
@@ -2652,7 +2628,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="mr-6 h-7 shrink-0 gap-1.5 px-2"
+                className="me-6 h-7 shrink-0 gap-1.5 px-2"
                 onClick={() => {
                   if (gitLogDialogMode === 'graph') {
                     setGraphLogRefreshToken((token) => token + 1);

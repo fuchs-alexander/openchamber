@@ -10,7 +10,9 @@
 // failure or "not connected" is never replayed. Anything that changes a
 // provider (a POST to its routes: mutations, sign-in, account switch) clears
 // that provider's answers, and so does an agent turn finishing, since the
-// agent may have opened or changed something.
+// agent may have opened or changed something. `POST <prefix>/read-cache/refresh`
+// clears them on request: the board's refresh button, for a change made on the
+// provider's own site.
 
 const SECOND = 1000;
 const MAX_ENTRIES = 300;
@@ -28,6 +30,7 @@ const ROUTES = [
 const CACHED_READS = new Map([
   ['/references', 30 * SECOND],
   ['/references/detail', 15 * SECOND],
+  ['/references/status', 30 * SECOND],
   ['/issues/list', 30 * SECOND],
   ['/issues/get', 15 * SECOND],
   ['/issues/comments', 15 * SECOND],
@@ -68,6 +71,10 @@ export function createProviderReadCache({ now = Date.now } = {}) {
   const middleware = (req, res, next) => {
     const route = routeOf(req.path);
     if (!route) return next();
+    if (req.method === 'POST' && req.path === `${route.prefix}/read-cache/refresh`) {
+      clear(route.provider);
+      return res.json({ ok: true });
+    }
     if (req.method !== 'GET') {
       // A change to this provider makes every kept answer of it suspect.
       res.on('finish', () => { if (res.statusCode < 400) clear(route.provider); });

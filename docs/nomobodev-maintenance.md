@@ -4,7 +4,7 @@ Dieser Fork baut aus einem Codestand mehrere gebrandete macOS-Apps. Jede App ist
 
 ## Stand
 
-- Upstream-Basis: Release `v2.1.1`, Commit `e302062e3be0686986594fddabdafd8a97c129e5`.
+- Upstream basis: release `v2.3.3`, commit `7521e712e9dbe12cce3c05debaa6d356fedea19b`.
 - Fork: `github.com/fuchs-alexander/openchamber`, Branch `nomobo`. Remotes: `origin` ist der Fork, `upstream` ist `openchamber/openchamber`.
 - Profile:
 
@@ -39,8 +39,8 @@ Beim Packaging landet das Profil als `Contents/Resources/brand-profile.json` im 
 
 ## Voraussetzungen
 
-- Bun `1.4.2` (siehe `packageManager` in `package.json`). Installiert unter `~/.bun/bin`, deshalb vor den Befehlen `export PATH="$HOME/.bun/bin:$PATH"`.
-- Node 22 oder neuer (Homebrew `node`).
+- The release declares Bun `1.4.3` in `packageManager`. The 2026-10-15 update used the existing Bun `1.4.2` for the frozen install, checks and all builds; the installed Bun was left unchanged. Add `~/.bun/bin` to `PATH` before the commands.
+- Node `24.14` or newer, as required by the web package. The installed Homebrew Node is used for builds.
 - Xcode Command Line Tools für `swift`, `sips`, `iconutil`, `codesign`. Ein volles Xcode ist nicht nötig, weil gebrandete Builds kein `Assets.car` brauchen.
 
 ## App bauen
@@ -131,9 +131,8 @@ bun install --frozen-lockfile
 env -u OPENCHAMBER_DATA_DIR bun run --cwd packages/electron test
 env -u OPENCHAMBER_DATA_DIR bun run --cwd packages/ui test
 env -u OPENCHAMBER_DATA_DIR bun run --cwd packages/web test
-bun run type-check
-bun run lint
-bun run dead-code
+# Use the backup branch created for this update as the comparison base.
+bun run check:changed -- --base backup/nomobo-before-vX.Y.Z-YYYYMMDD
 OPENCHAMBER_BRAND_PROFILE=claudi bun run electron:build
 OPENCHAMBER_BRAND_PROFILE=nomobogaming bun run electron:build
 OPENCHAMBER_BRAND_PROFILE=nomobohosting bun run electron:build
@@ -144,7 +143,7 @@ OPENCHAMBER_BRAND_PROFILE=nomobolocal bun run electron:build
 
 For a single unchanged source tree, the first full `electron:build` prepares the shared UI, bundled CLI, main bundle and native modules. Remaining profiles can reuse those assets with `OPENCHAMBER_BRAND_PROFILE=<id> node scripts/package.mjs` from `packages/electron`. Run packaging sequentially because it shares staging files. Do not run that script from the repository root: it resolves Electron Builder and the after-pack hook relative to its working directory. If source or dependencies change, repeat the full build first.
 
-Before installation, check each bundle's version, bundle ID, embedded profile, icons and `codesign --verify --deep --strict`. No branded bundle may contain `app-update.yml`. Confirm the bundled OpenCode version matches `packages/electron/package.json`. Read the dead-code report; it is non-blocking and can contain upstream findings.
+Before installation, check each bundle's version, bundle ID, embedded profile, icons and `codesign --verify --deep --strict`. No branded bundle may contain `app-update.yml`. Confirm the bundled OpenCode version matches `packages/electron/package.json`. The pre-commit gate runs type-check, lint, dead-code analysis and the anti-slop comparison. Inspect any failure before committing; dead-code findings now fail the gate.
 
 Finish the merge only after resolving conflicts and recording validation. Update this guide's basis and add an update record with the tag, conflict decisions, test results, installed profiles, backup location and any remaining manual checks. Keep unrelated local documentation edits unstaged. A push is a separate action.
 
@@ -157,6 +156,20 @@ When an agent running inside a desktop app launches another branded app, set its
 Check each restarted app connects to its intended server, retains its login, shows the right host logo and has no unexpected Local option. Remote-only apps may run beside the original OpenChamber. Test nomobolocal separately with the original closed; never run both on their shared data. Its version should match the installed original before shared-data use. Updating the original or remote servers requires its own approval.
 
 For rollback, quit the affected app, move its new bundle aside, restore the old complete bundle and verify its signature before launch. Leave settings and credentials alone. An old bundle does not reverse data migrations; nomobolocal shares OpenChamber data, so assess release compatibility before downgrading it.
+
+### Update record: 2026-10-15, v2.1.1 to v2.3.3
+
+- Release commit: `7521e712e9dbe12cce3c05debaa6d356fedea19b`, published as stable on 2026-10-14. Bundled OpenCode is `2.0.29`.
+- Source rollback point: `backup/nomobo-before-v2.3.3-20261015-agent`. The working tree was clean before the merge. No push is authorized.
+- Conflicts: `Header.tsx`, `DesktopHostSwitcher.tsx`, `desktopHosts.ts` and its tests. Upstream moved the instance menu out of the header; the host-logo state and rendering now live in `DesktopInstanceMenu.tsx`. The switcher keeps the remote-only availability flag together with upstream's local-origin check. Both logo metadata and SSH-forwarding metadata survive parsing, and both test groups remain.
+- The Electron identity, data-directory isolation, default-host seeding, disabled updater and deep-link registration, and nomobolocal's shared-data startup lock remain. Branding profiles and asset files are unchanged. The removed continuous preferences sync stays absent.
+- Frozen dependency installation passed with Bun `1.4.2`. Electron passed 53 test files; UI passed 869. The final host-metadata fixture passed separately with 20 tests. Focused oxlint passed on the four manually integrated TypeScript files.
+- On system Node `26.12.0`, Web passed 394 files and failed one proxy test, with nine files skipped. The test expects a CONNECT tunnel for HTTP. An isolated loopback probe showed that Node 26 routes HTTP through an ordinary proxy request; Electron's Node `24.21.0` uses CONNECT. The unchanged proxy test passed under Electron's Node 24. No proxy code was changed and no system program was installed or updated.
+- The final full Web run passed under standalone Node `24.21.0`: 395 files and 7,235 tests passed; nine files and 137 tests skipped. The official arm64 runtime was extracted only in the approved temporary directory after SHA-256 verification. An earlier full attempt using Electron as the Node host had six fixture failures in five files and is not acceptance evidence.
+- `check:changed -- --base backup/nomobo-before-v2.3.3-20261015-agent` passed workspace type-check, lint, dead-code analysis with no code findings and the anti-slop comparison across 1,973 changed source files. Knip printed one configuration hint for an unmatched mobile pattern. Five upstream files have a trailing blank-line whitespace finding; the manually integrated files and this guide pass the focused whitespace check.
+- All six macOS arm64 profiles were built sequentially. The full `claudi` build prepared the shared UI, CLI, main bundles and Electron 43.7.0 native modules; the other profiles reused those outputs through `node scripts/package.mjs` in `packages/electron`. Each bundle passed version `2.3.3`, its bundle ID and embedded profile, byte-matched profile icon and 36 tray assets, `codesign --verify --deep --strict`, no `app-update.yml` or upstream `Assets.car`, no `nomobo-shared` reference in the archive, and bundled OpenCode `2.0.29`. Outputs are under `packages/electron/dist/brand-<profile>/mac-arm64/<displayName>.app`.
+- No HMR, rendered UI, real server connection, installed-app startup or shared-data migration was exercised. No Windows, Linux, VS Code or mobile runtime test was run. No internal reviewer tool was available; the fork integration received a local read-only review. Logs and the bundle verification manifest are retained in the approved temporary directory with the `v233-` prefix.
+- Installation is separate from this source/build task. No running app was stopped and `/Applications/OpenChamber.app` remains untouched. Check the original app's version before alternating it with the new nomobolocal on shared data. Release `2.2.0` moves relay keys out of `settings.json`; preserve a complete data backup before a real launch or rollback.
 
 ### Update record: 2026-10-05, v2.1.0 to v2.1.1
 
